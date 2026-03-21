@@ -293,6 +293,28 @@ Key files:
 Follow-up gaps:
 - Early redemption currently depends on backend progress reaching the full checkpoint target, so manual-input integrations still need a clearer early-completion UX if they are expected to support the same behavior.
 
+### 2026-03-21 - Shared Miniapp Challenge Cache
+
+Summary:
+- Moved the miniapp challenge list and backend progress map into a shared provider mounted above the route tree instead of keeping them only inside the home page component.
+- Updated the home screen to render from the shared cache immediately after route navigation while still issuing its normal refresh request on mount.
+- Wired the create and challenge-detail flows to seed and update the shared cache so navigation back to home no longer starts from an empty list.
+
+Why it matters now:
+- Returning from a challenge page to the home page no longer wipes the visible challenge list before the refresh completes.
+- The miniapp now has a clearer place to centralize fetched challenge data as more screens start reusing the same chain/backend state.
+
+Key files:
+- `apps/miniapp/src/challenge-cache.tsx`
+- `apps/miniapp/src/main.tsx`
+- `apps/miniapp/src/pages/Home.tsx`
+- `apps/miniapp/src/pages/CreateChallenge.tsx`
+- `apps/miniapp/src/pages/ChallengeDetail.tsx`
+
+Follow-up gaps:
+- The shared cache is still in-memory only, so a full browser reload still starts cold.
+- Cache invalidation remains simple refresh-overwrite logic rather than a more formal query/cache layer.
+
 ### 2026-03-21 - Miniapp Visual Redesign Without Flow Changes
 
 Summary:

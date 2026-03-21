@@ -5,6 +5,7 @@ import { TonConnectUIProvider } from "@tonconnect/ui-react";
 import { CreateChallenge } from "./pages/CreateChallenge";
 import { ChallengeDetail } from "./pages/ChallengeDetail";
 import { Home } from "./pages/Home";
+import { ChallengeCacheProvider } from "./challenge-cache";
 import "./index.css";
 
 const MANIFEST_URL =
@@ -14,13 +15,15 @@ const MANIFEST_URL =
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
     <TonConnectUIProvider manifestUrl={MANIFEST_URL}>
-      <BrowserRouter basename={import.meta.env.BASE_URL}>
-        <Routes>
-          <Route path="/" element={<Home />} />
-          <Route path="/create" element={<CreateChallenge />} />
-          <Route path="/challenge/:id" element={<ChallengeDetail />} />
-        </Routes>
-      </BrowserRouter>
+      <ChallengeCacheProvider>
+        <BrowserRouter basename={import.meta.env.BASE_URL}>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/create" element={<CreateChallenge />} />
+            <Route path="/challenge/:id" element={<ChallengeDetail />} />
+          </Routes>
+        </BrowserRouter>
+      </ChallengeCacheProvider>
     </TonConnectUIProvider>
   </React.StrictMode>,
 );

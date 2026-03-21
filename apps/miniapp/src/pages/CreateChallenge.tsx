@@ -16,6 +16,7 @@ import {
   normalizeAddress,
   toNano,
 } from "../contract";
+import { useChallengeCache } from "../challenge-cache";
 
 function formatWalletPreview(address: string) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
@@ -25,6 +26,7 @@ export function CreateChallenge() {
   const navigate = useNavigate();
   const [tonConnectUI] = useTonConnectUI();
   const userAddress = useTonAddress();
+  const { storeChallenge } = useChallengeCache();
 
   const [app, setApp] = useState<App>(App.Github);
   const [action, setAction] = useState<AppAction>(APP_ACTIONS[App.Github][0].value);
@@ -129,6 +131,7 @@ export function CreateChallenge() {
         unlisted,
       });
 
+      storeChallenge(indexedChallenge);
       navigate(`/challenge/${indexedChallenge.index}`, {
         state: { challenge: indexedChallenge },
       });

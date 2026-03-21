@@ -13,6 +13,7 @@ import {
   type OnChainChallenge,
 } from "../contract";
 import { backendApi, type VerificationResult, type AuthStatus } from "../api";
+import { useChallengeCache } from "../challenge-cache";
 import { APP_LABELS, formatActionLabel, parseChallengeId } from "../types/challenge";
 
 const OAUTH_APPS = ["github"] as const;
@@ -39,13 +40,15 @@ export function ChallengeDetail() {
   const location = useLocation();
   const [tonConnectUI] = useTonConnectUI();
   const userAddress = useTonAddress();
+  const { getCachedChallenge, progressMap, storeChallenge } = useChallengeCache();
 
   const idx = parseInt(id || "0", 10);
   const locationState = location.state as ChallengeLocationState | null;
+  const cachedChallenge = getCachedChallenge(idx);
   const prefetchedChallenge =
     locationState?.challenge && locationState.challenge.index === idx
       ? locationState.challenge
-      : null;
+      : cachedChallenge;
 
   const [challenge, setChallenge] = useState<OnChainChallenge | null>(prefetchedChallenge);
   const [claimedMap, setClaimedMap] = useState<boolean[]>(
@@ -64,7 +67,9 @@ export function ChallengeDetail() {
   const [duolingoInput, setDuolingoInput] = useState("");
   const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
   const [connecting, setConnecting] = useState(false);
-  const [backendProgress, setBackendProgress] = useState<number>(0);
+  const [backendProgress, setBackendProgress] = useState<number>(
+    prefetchedChallenge ? progressMap[String(prefetchedChallenge.index)] ?? prefetchedChallenge.claimedCount : 0,
+  );
 
   useEffect(() => {
     setLoading(prefetchedChallenge === null);
@@ -74,13 +79,16 @@ export function ChallengeDetail() {
     setCreatorContribution(null);
     setVerification(null);
     setAuthStatus(null);
+    setBackendProgress(
+      prefetchedChallenge ? progressMap[String(prefetchedChallenge.index)] ?? prefetchedChallenge.claimedCount : 0,
+    );
     setError("");
     void loadChallenge({
       seedChallenge: prefetchedChallenge,
       forceRefresh: prefetchedChallenge === null,
       showBlockingLoader: prefetchedChallenge === null,
     });
-  }, [idx, userAddress, prefetchedChallenge]);
+  }, [idx, userAddress]);
 
   async function loadChallenge(options?: {
     forceRefresh?: boolean;
@@ -127,6 +135,7 @@ export function ChallengeDetail() {
         progressPromise,
       ]);
 
+      storeChallenge({ ...c, index: idx }, prog.progress);
       setClaimedMap(buildClaimedMap(c));
       setCreatorContribution(creatorStake);
       setUserContribution(userAddress ? currentUserStake : null);

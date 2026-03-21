@@ -1,11 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { Link } from "react-router-dom";
 import { TonConnectButton, useTonAddress } from "@tonconnect/ui-react";
-import { getAllChallenges, normalizeAddress, type OnChainChallenge } from "../contract";
-import { backendApi } from "../api";
+import { normalizeAddress } from "../contract";
+import { useChallengeCache, type IndexedChallenge } from "../challenge-cache";
 import { APP_LABELS, formatActionLabel, parseChallengeId } from "../types/challenge";
-
-type IndexedChallenge = OnChainChallenge & { index: number };
 
 function ChallengeCard({ challenge, progress }: { challenge: IndexedChallenge; progress: number }) {
   const { app: appKey, action, count } = parseChallengeId(challenge.challengeId);
@@ -79,36 +77,13 @@ function ChallengeCard({ challenge, progress }: { challenge: IndexedChallenge; p
 
 export function Home() {
   const userAddress = useTonAddress();
-  const [challenges, setChallenges] = useState<IndexedChallenge[]>([]);
-  const [progressMap, setProgressMap] = useState<Record<string, number>>({});
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const hasContractAddress = Boolean(import.meta.env.VITE_CONTRACT_ADDRESS);
+  const { challenges, progressMap, loading, error, hasContractAddress, refreshChallenges } = useChallengeCache();
 
   const normalizedUserAddress = userAddress ? normalizeAddress(userAddress) : "";
 
-  async function refreshChallenges() {
-    if (!hasContractAddress) return;
-    setLoading(true);
-    setError("");
-    try {
-      const [nextChallenges, allProgress] = await Promise.all([
-        getAllChallenges(),
-        backendApi.getAllProgress().catch(() => ({})),
-      ]);
-      setChallenges(nextChallenges);
-      setProgressMap(allProgress);
-    } catch (e: any) {
-      console.error("Failed to load challenges:", e);
-      setError(e.message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
   useEffect(() => {
     void refreshChallenges();
-  }, [hasContractAddress]);
+  }, [refreshChallenges]);
 
   const myChallenges = userAddress
     ? challenges.filter((c) => {
@@ -268,7 +243,7 @@ export function Home() {
             <p>When users create public challenges, they will appear here.</p>
           </div>
         )}
-        {!loading && browseChallenges.length > 0 && (
+        {browseChallenges.length > 0 && (
           <div className="list-stack challenge-list">
             {browseChallenges.map((c) => (
               <ChallengeCard key={c.index} challenge={c} progress={progressMap[String(c.index)] || 0} />
