@@ -1,10 +1,15 @@
 import cron from "node-cron";
+import { Address } from "@ton/core";
 import { getAllChallenges, type OnChainChallenge } from "./chain.js";
 import { getAllAccounts, addProgress, getProgress, filterAndMarkProcessed, cleanupProcessedEvents } from "./store.js";
 import { fetchUserEvents, extractEvents } from "./events.js";
 
 function normalizeAddress(addr: string): string {
-  return addr.replace(/[-_]/g, (c) => (c === "-" ? "+" : "/"));
+  try {
+    return Address.parse(addr).toRawString();
+  } catch {
+    return addr.replace(/[-_]/g, (c) => (c === "-" ? "+" : "/"));
+  }
 }
 
 interface UserInfo {
