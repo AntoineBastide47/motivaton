@@ -15,6 +15,7 @@ import { verifyRouter } from "./routes/verify.js";
 import { authRouter } from "./routes/auth.js";
 import { webhookRouter } from "./routes/webhook.js";
 import { startCronJobs, progressJob } from "./cron.js";
+import { addProgress, getProgress } from "./store.js";
 
 const app = express();
 const PORT = parseInt(process.env.PORT || "3001", 10);
@@ -37,6 +38,19 @@ app.post("/api/cron/trigger", async (_req, res) => {
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// DEBUG: increment progress for a challenge
+app.post("/api/debug/progress/:challengeIdx", (req, res) => {
+  const challengeIdx = parseInt(req.params.challengeIdx, 10);
+  if (isNaN(challengeIdx)) {
+    res.status(400).json({ error: "Invalid challengeIdx" });
+    return;
+  }
+  addProgress(challengeIdx, 1);
+  const current = getProgress(challengeIdx);
+  console.log(`[debug] Challenge #${challengeIdx} progress: ${current}`);
+  res.json({ challengeIdx, progress: current });
 });
 
 app.get("/api/health", (_req, res) => {

@@ -33,6 +33,7 @@ function ChallengeCard({ challenge }: { challenge: IndexedChallenge }) {
         <div>
           <div className="challenge-card-app-row">
             <div className="challenge-card-app">{appLabel}</div>
+            <span className="mini-pill">#{challenge.index}</span>
             {challenge.unlisted && <span className="mini-pill">Unlisted</span>}
           </div>
           <h3 className="challenge-card-title">{actionLabel}</h3>

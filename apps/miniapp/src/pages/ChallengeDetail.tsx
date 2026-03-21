@@ -352,7 +352,7 @@ export function ChallengeDetail() {
       </button>
 
       <header className="surface surface-accent hero-panel detail-header">
-        <div className="eyebrow">On-chain challenge</div>
+        <div className="eyebrow">On-chain challenge #{idx}</div>
         <div className="detail-title-row">
           <div>
             <h1 className="detail-title">{appLabel} / {actionLabel}</h1>
