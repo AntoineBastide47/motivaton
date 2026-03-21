@@ -1,23 +1,55 @@
 import cron from "node-cron";
-import { getAllChallenges } from "./chain.js";
-import { getAllAccounts, addProgress } from "./store.js";
-import { getGitHubDailyCount } from "./github.js";
-
-function getPreviousMinuteRange(): string {
-  const now = new Date();
-  now.setUTCSeconds(0, 0);
-  const start = new Date(now.getTime() - 60_000);
-  return `${start.toISOString().slice(0, 19)}Z..${new Date(start.getTime() + 59_000).toISOString().slice(0, 19)}Z`;
-}
+import { getAllChallenges, type OnChainChallenge } from "./chain.js";
+import { getAllAccounts, addProgress, filterAndMarkProcessed, cleanupProcessedEvents } from "./store.js";
+import { fetchUserEvents, extractEvents } from "./events.js";
 
 function normalizeAddress(addr: string): string {
   return addr.replace(/[-_]/g, (c) => (c === "-" ? "+" : "/"));
 }
 
-async function dailyProgressJob() {
-  const date = getPreviousMinuteRange();
-  console.log(`[cron] Progress job for ${date}`);
+interface UserInfo {
+  wallet: string;
+  username: string;
+  token: string;
+}
 
+function collectGitHubUsers(
+  activeChallenges: (OnChainChallenge & { index: number })[],
+  accounts: Record<string, { github?: { accessToken: string; username: string } }>,
+): Map<string, UserInfo> {
+  const users = new Map<string, UserInfo>();
+
+  for (const c of activeChallenges) {
+    const parts = c.challengeId.split(":");
+    if (parts.length < 3 || parts[0] !== "GITHUB") continue;
+
+    const normBeneficiary = normalizeAddress(c.beneficiary);
+    if (users.has(normBeneficiary)) continue;
+
+    const entry = Object.entries(accounts).find(
+      ([w]) => normalizeAddress(w) === normBeneficiary,
+    );
+
+    if (entry?.[1].github) {
+      users.set(normBeneficiary, {
+        wallet: entry[0],
+        username: entry[1].github.username,
+        token: entry[1].github.accessToken,
+      });
+    }
+  }
+
+  return users;
+}
+
+/**
+ * Core progress job: fetches GitHub Events API for each user with linked
+ * credentials, deduplicates against already-processed events, and increments
+ * challenge progress for any new activity.
+ *
+ * @param lookbackMs How far back to look for events (dedup prevents double-counting)
+ */
+async function eventsProgressJob(lookbackMs: number) {
   let challenges;
   try {
     challenges = await getAllChallenges();
@@ -26,82 +58,69 @@ async function dailyProgressJob() {
     return;
   }
 
-  // Filter: active and not yet expired
   const now = Date.now() / 1000;
   const activeChallenges = challenges.filter((c) => c.active && c.endDate > now);
-  console.log(`[cron] ${activeChallenges.length} active challenges out of ${challenges.length} total`);
-
   if (activeChallenges.length === 0) return;
 
-  // Load all linked accounts
   const accounts = getAllAccounts();
+  const users = collectGitHubUsers(activeChallenges, accounts);
+  const since = new Date(Date.now() - lookbackMs);
 
-  // Group challenges by (normalized beneficiary, app, action)
-  // so we query each GitHub user's action only once
-  const grouped = new Map<
-    string,
-    { beneficiary: string; app: string; action: string; indices: number[] }
-  >();
-
-  for (const c of activeChallenges) {
-    const parts = c.challengeId.split(":");
-    if (parts.length < 3) continue;
-    const [app, action] = parts;
-    const normBeneficiary = normalizeAddress(c.beneficiary);
-    const key = `${normBeneficiary}:${app}:${action}`;
-
-    const existing = grouped.get(key);
-    if (existing) {
-      existing.indices.push(c.index);
-    } else {
-      grouped.set(key, { beneficiary: c.beneficiary, app, action, indices: [c.index] });
-    }
-  }
-
-  for (const [key, group] of grouped) {
-    if (group.app !== "GITHUB") continue;
-
-    // Find the GitHub credentials for this beneficiary
-    const normBeneficiary = normalizeAddress(group.beneficiary);
-    const creds = Object.entries(accounts).find(
-      ([wallet]) => normalizeAddress(wallet) === normBeneficiary,
-    );
-
-    if (!creds || !creds[1].github) {
-      console.log(`[cron] No GitHub credentials for beneficiary ${group.beneficiary.slice(0, 12)}... (${key})`);
-      continue;
-    }
-
-    const { accessToken, username } = creds[1].github;
-
+  for (const [normAddr, { wallet, username, token }] of users) {
     try {
-      const count = await getGitHubDailyCount(group.action, username, accessToken, date);
-      console.log(`[cron] @${username} ${group.action} on ${date}: ${count}`);
+      const events = await fetchUserEvents(username, token);
+      const eventsByAction = extractEvents(events, since);
 
-      if (count > 0) {
-        for (const idx of group.indices) {
-          addProgress(idx, count);
-          console.log(`[cron] Challenge #${idx}: +${count}`);
+      for (const [action, ids] of Object.entries(eventsByAction)) {
+        const newIds = filterAndMarkProcessed(wallet, ids, action);
+        if (newIds.length === 0) continue;
+
+        const matching = activeChallenges.filter((c) => {
+          const parts = c.challengeId.split(":");
+          return parts[0] === "GITHUB" && parts[1] === action && normalizeAddress(c.beneficiary) === normAddr;
+        });
+
+        for (const c of matching) {
+          addProgress(c.index, newIds.length);
+          console.log(`[cron] Challenge #${c.index}: +${newIds.length} ${action} by @${username}`);
         }
       }
     } catch (err) {
-      console.error(`[cron] Failed to query GitHub for @${username} ${group.action}:`, err);
+      console.error(`[cron] Failed for @${username}:`, err);
     }
   }
+}
 
-  console.log(`[cron] Daily progress job completed`);
+/** Primary job: every minute, 5-minute lookback. */
+async function minuteJob() {
+  await eventsProgressJob(5 * 60_000);
+}
+
+/** Catchup job: every 15 minutes, 1-hour lookback. */
+async function catchupJob() {
+  console.log("[cron] Running catchup sweep (1-hour lookback)");
+  await eventsProgressJob(60 * 60_000);
 }
 
 export function startCronJobs() {
-  // Every minute
+  // Primary: every minute
   cron.schedule("* * * * *", () => {
-    dailyProgressJob().catch((err) => {
-      console.error("[cron] Progress job failed:", err);
-    });
+    minuteJob().catch((err) => console.error("[cron] Minute job failed:", err));
   });
 
-  console.log("[cron] Scheduled progress job (every minute)");
+  // Catchup: every 15 minutes with wider lookback for missed events
+  cron.schedule("*/15 * * * *", () => {
+    catchupJob().catch((err) => console.error("[cron] Catchup job failed:", err));
+  });
+
+  // Cleanup: every hour, remove processed events older than 2 hours
+  cron.schedule("0 * * * *", () => {
+    cleanupProcessedEvents(2 * 3600_000);
+    console.log("[cron] Cleaned up old processed events");
+  });
+
+  console.log("[cron] Scheduled: minute poll, 15-min catchup, hourly cleanup");
 }
 
-// Export for manual trigger (e.g., testing endpoint)
-export { dailyProgressJob };
+// Export for manual trigger
+export { minuteJob as progressJob };

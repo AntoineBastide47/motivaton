@@ -10,12 +10,17 @@ import express from "express";
 import cors from "cors";
 import { verifyRouter } from "./routes/verify.js";
 import { authRouter } from "./routes/auth.js";
-import { startCronJobs, dailyProgressJob } from "./cron.js";
+import { webhookRouter } from "./routes/webhook.js";
+import { startCronJobs, progressJob } from "./cron.js";
 
 const app = express();
 const PORT = parseInt(process.env.PORT || "3001", 10);
 
 app.use(cors());
+
+// Webhook needs raw body for signature verification — mount before JSON parser
+app.use("/api/webhook", webhookRouter);
+
 app.use(express.json());
 
 app.use("/api/verify", verifyRouter);
@@ -24,7 +29,7 @@ app.use("/api/auth", authRouter);
 // Manual cron trigger for testing
 app.post("/api/cron/trigger", async (_req, res) => {
   try {
-    await dailyProgressJob();
+    await progressJob();
     res.json({ ok: true });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
