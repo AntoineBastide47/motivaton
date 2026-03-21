@@ -6,9 +6,9 @@ import {
   APP_ACTIONS,
   APP_LABELS,
   type AppAction,
-  type ChallengeFormData,
   buildChallengeId,
 } from "../types/challenge";
+import { buildCreateChallengeBody, CONTRACT_ADDRESS, toNano } from "../contract";
 
 export function CreateChallenge() {
   const navigate = useNavigate();
@@ -21,6 +21,10 @@ export function CreateChallenge() {
   const [amount, setAmount] = useState("");
   const [whoIsPaid, setWhoIsPaid] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [endHour, setEndHour] = useState("23");
+  const [endMinute, setEndMinute] = useState("59");
+  const [duolingoUsername, setDuolingoUsername] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   const actions = useMemo(() => APP_ACTIONS[app], [app]);
 
@@ -41,21 +45,44 @@ export function CreateChallenge() {
       return;
     }
 
-    const challenge: ChallengeFormData = {
-      whoPays: userAddress,
-      whoIsPaid: whoIsPaid || userAddress,
-      amount: Math.floor(parseFloat(amount) * 1e9),
-      app,
-      action,
-      count,
-      endDate: Math.floor(new Date(endDate).getTime() / 1000),
-    };
+    if (!CONTRACT_ADDRESS) {
+      alert("Contract address not configured. Set VITE_CONTRACT_ADDRESS.");
+      return;
+    }
 
-    const id = buildChallengeId(challenge.app, challenge.action, challenge.count);
+    setSubmitting(true);
+    try {
+      const beneficiary = whoIsPaid || userAddress;
+      const endTimestamp = Math.floor(
+        new Date(`${endDate}T${endHour.padStart(2, "0")}:${endMinute.padStart(2, "0")}:00`).getTime() / 1000,
+      );
+      const totalCheckpoints = count;
 
-    // TODO: send to backend + trigger smart contract transaction
-    console.log("Challenge created:", { ...challenge, challengeId: id });
-    alert(`Challenge created!\n\nID: ${id}\nAmount: ${amount} TON\nDeadline: ${endDate}`);
+      const body = buildCreateChallengeBody(beneficiary, challengeId, totalCheckpoints, endTimestamp);
+
+      // Send transaction via TON Connect
+      await tonConnectUI.sendTransaction({
+        validUntil: Math.floor(Date.now() / 1000) + 600,
+        messages: [
+          {
+            address: CONTRACT_ADDRESS,
+            amount: toNano(amount).toString(),
+            payload: body.toBoc().toString("base64"),
+          },
+        ],
+      });
+
+      // After successful transaction, navigate to home to see the new challenge
+      navigate("/");
+    } catch (err: any) {
+      if (err.message?.includes("Cancelled") || err.message?.includes("canceled")) {
+        // User cancelled — do nothing
+      } else {
+        alert(err.message || "Failed to create challenge.");
+      }
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   const actionLabel = actions.find((a) => a.value === action)?.label ?? action;
@@ -112,12 +139,15 @@ export function CreateChallenge() {
             className="form-input"
             type="number"
             step="0.01"
-            min="0.01"
+            min="0.06"
             placeholder="1.00"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
             required
           />
+          <span style={{ fontSize: 12, color: "var(--tg-theme-hint-color)" }}>
+            0.05 TON reserved for gas; rest is escrowed
+          </span>
         </div>
 
         <div className="form-group">
@@ -132,7 +162,7 @@ export function CreateChallenge() {
         </div>
 
         <div className="form-group">
-          <label className="form-label">Deadline</label>
+          <label className="form-label">Deadline Date</label>
           <input
             className="form-input"
             type="date"
@@ -142,6 +172,48 @@ export function CreateChallenge() {
             required
           />
         </div>
+
+        {endDate && (
+          <div className="form-group">
+            <label className="form-label">Deadline Time</label>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <select
+                className="form-select"
+                value={endHour}
+                onChange={(e) => setEndHour(e.target.value)}
+                style={{ flex: 1 }}
+              >
+                {Array.from({ length: 24 }, (_, i) => (
+                  <option key={i} value={String(i)}>{String(i).padStart(2, "0")}</option>
+                ))}
+              </select>
+              <span style={{ fontSize: 20, fontWeight: 600 }}>:</span>
+              <select
+                className="form-select"
+                value={endMinute}
+                onChange={(e) => setEndMinute(e.target.value)}
+                style={{ flex: 1 }}
+              >
+                {[0, 15, 30, 45].map((m) => (
+                  <option key={m} value={String(m)}>{String(m).padStart(2, "0")}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+        )}
+
+        {app === App.Duolingo && (
+          <div className="form-group">
+            <label className="form-label">Duolingo Username</label>
+            <input
+              className="form-input"
+              type="text"
+              placeholder="Your Duolingo username"
+              value={duolingoUsername}
+              onChange={(e) => setDuolingoUsername(e.target.value)}
+            />
+          </div>
+        )}
 
         {amount && endDate && (
           <div className="challenge-summary">
@@ -162,7 +234,7 @@ export function CreateChallenge() {
             </div>
             <div className="summary-row">
               <span className="summary-label">Deadline</span>
-              <span>{new Date(endDate).toLocaleDateString()}</span>
+              <span>{new Date(endDate).toLocaleDateString()} {endHour.padStart(2, "0")}:{endMinute.padStart(2, "0")}</span>
             </div>
             <div className="summary-row">
               <span className="summary-label">Payer</span>
@@ -181,8 +253,8 @@ export function CreateChallenge() {
           </div>
         )}
 
-        <button type="submit" className="submit-btn">
-          {userAddress ? "Create Challenge" : "Connect Wallet"}
+        <button type="submit" className="submit-btn" disabled={submitting}>
+          {!userAddress ? "Connect Wallet" : submitting ? "Creating..." : "Create Challenge"}
         </button>
       </form>
 

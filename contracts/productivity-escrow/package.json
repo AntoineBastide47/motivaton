@@ -1,0 +1,13 @@
+{
+  "name": "motivaton-contracts",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "build": "tact --config tact.config.json",
+    "clean": "rm -rf build"
+  },
+  "devDependencies": {
+    "@tact-lang/compiler": "^1.5.0"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "projects": [
+    {
+      "name": "ProductivityEscrow",
+      "path": "./src/productivity_escrow.tact",
+      "output": "./build",
+      "options": {}
+    }
+  ]
+}

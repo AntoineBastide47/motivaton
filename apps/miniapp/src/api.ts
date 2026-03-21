@@ -1,0 +1,63 @@
+const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:3001/api";
+
+async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    headers: { "Content-Type": "application/json" },
+    ...options,
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error(err.error || res.statusText);
+  }
+  return res.json();
+}
+
+export interface VerifyCheckRequest {
+  app: string;
+  action: string;
+  count: number;
+  duolingoUsername?: string;
+}
+
+export interface VerificationResult {
+  verified: boolean;
+  currentCount: number;
+  targetCount: number;
+  message: string;
+}
+
+export interface SignProofRequest {
+  challengeIdx: number;
+  checkpointIndex: number;
+  beneficiaryAddress: string;
+  duolingoUsername?: string;
+}
+
+export interface SignProofResponse {
+  verified: boolean;
+  signature: string;
+  challengeIdx: number;
+  checkpointIndex: number;
+  beneficiaryAddress: string;
+}
+
+/** Backend API — verification and signing only */
+export const backendApi = {
+  check(data: VerifyCheckRequest) {
+    return request<VerificationResult>("/verify/check", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  signProof(data: SignProofRequest) {
+    return request<SignProofResponse>("/verify/sign-proof", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  getPublicKey() {
+    return request<{ publicKey: string }>("/verify/public-key");
+  },
+};

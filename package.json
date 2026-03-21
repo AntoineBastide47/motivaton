@@ -16,7 +16,9 @@
     "address": "pnpm --filter x402-client-example address --",
     "build": "pnpm --filter './packages/**' -r build",
     "clean": "rm -rf packages/*/dist",
-    "typecheck": "pnpm -r exec tsc --noEmit"
+    "typecheck": "pnpm --filter motivaton-miniapp --filter motivaton-backend exec tsc --noEmit",
+    "dev:miniapp": "pnpm --filter motivaton-miniapp dev",
+    "dev:backend": "pnpm --filter motivaton-backend dev"
   },
   "engines": {
     "node": ">=18"
@@ -28,5 +30,8 @@
   },
   "dependencies": {
     "@ton-community/assets-sdk": "^0.0.5"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["better-sqlite3", "esbuild", "sharp"]
   }
 }

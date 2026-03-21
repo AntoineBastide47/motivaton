@@ -8,3 +8,5 @@ examples/.env
 .idea/
 examples/nextjs-server/.env.local
 **/.DS_Store
+# Backend SQLite data
+apps/backend/data/

@@ -1,0 +1,768 @@
+#pragma version =0.4.6;
+#pragma allow-post-modification;
+#pragma compute-asm-ltr;
+
+;; ProductivityEscrow_ProductivityEscrow.headers.fc
+;;
+;; Header files for ProductivityEscrow
+;; NOTE: declarations are sorted for optimal order
+;;
+
+;; __tact_context_get
+(int, slice, int, slice) __tact_context_get() inline;
+
+;; __tact_context_get_sender
+slice __tact_context_get_sender() inline;
+
+;; __tact_dict_get_int_int
+int __tact_dict_get_int_int(cell d, int kl, int k, int vl) inline;
+
+;; __tact_dict_set_int_int
+(cell, ()) __tact_dict_set_int_int(cell d, int kl, int k, int v, int vl) inline;
+
+;; __tact_dict_get_int_cell
+cell __tact_dict_get_int_cell(cell d, int kl, int k) inline;
+
+;; __tact_dict_set_int_cell
+(cell, ()) __tact_dict_set_int_cell(cell d, int kl, int k, cell v) inline;
+
+;; $DeployOk$_store
+builder $DeployOk$_store(builder build_0, (int) v) inline;
+
+;; $DeployOk$_store_cell
+cell $DeployOk$_store_cell((int) v, builder b) inline;
+
+;; $ChallengeData$_store
+builder $ChallengeData$_store(builder build_0, (slice, slice, slice, int, int, int, int, int, int) v) inline;
+
+;; $ChallengeData$_store_cell
+cell $ChallengeData$_store_cell((slice, slice, slice, int, int, int, int, int, int) v, builder b) inline;
+
+;; $ChallengeData$_load
+(slice, ((slice, slice, slice, int, int, int, int, int, int))) $ChallengeData$_load(slice sc_0) inline;
+
+;; $ChallengeData$_as_optional
+tuple $ChallengeData$_as_optional((slice, slice, slice, int, int, int, int, int, int) v) inline;
+
+;; $ChallengeData$_load_opt
+tuple $ChallengeData$_load_opt(cell cl) inline;
+
+;; $ProductivityEscrow$_store
+builder $ProductivityEscrow$_store(builder build_0, (slice, int, int, cell, cell) v) inline;
+
+;; $ProductivityEscrow$_load
+(slice, ((slice, int, int, cell, cell))) $ProductivityEscrow$_load(slice sc_0) inline;
+
+;; $Context$_get_value
+_ $Context$_get_value((int, slice, int, slice) v) inline;
+
+;; $ChallengeData$_not_null
+((slice, slice, slice, int, int, int, int, int, int)) $ChallengeData$_not_null(tuple v) inline;
+
+;; $ChallengeData$_to_tuple
+tuple $ChallengeData$_to_tuple(((slice, slice, slice, int, int, int, int, int, int)) v) inline;
+
+;; $ChallengeData$_to_opt_tuple
+tuple $ChallengeData$_to_opt_tuple(tuple v) inline;
+
+;; $ChallengeData$_to_opt_external
+tuple $ChallengeData$_to_opt_external(tuple v) inline;
+
+;; $ProductivityEscrow$init$_load
+(slice, ((slice, int))) $ProductivityEscrow$init$_load(slice sc_0) inline;
+
+;; $ProductivityEscrow$_contract_init
+(slice, int, int, cell, cell) $ProductivityEscrow$_contract_init(slice $owner, int $verifierPublicKey) impure inline;
+
+;; $ProductivityEscrow$_contract_load
+(slice, int, int, cell, cell) $ProductivityEscrow$_contract_load() impure inline;
+
+;; $ProductivityEscrow$_contract_store
+() $ProductivityEscrow$_contract_store((slice, int, int, cell, cell) v) impure inline;
+
+;; $ProductivityEscrow$_fun_challengeCount
+((slice, int, int, cell, cell), int) $ProductivityEscrow$_fun_challengeCount((slice, int, int, cell, cell) $self) impure inline_ref;
+
+;; $ProductivityEscrow$_fun_challenge
+((slice, int, int, cell, cell), tuple) $ProductivityEscrow$_fun_challenge((slice, int, int, cell, cell) $self, int $idx) impure inline_ref;
+
+;; $ProductivityEscrow$_fun_isCheckpointClaimed
+((slice, int, int, cell, cell), int) $ProductivityEscrow$_fun_isCheckpointClaimed((slice, int, int, cell, cell) $self, int $challengeIdx, int $checkpointIdx) impure inline_ref;
+
+;; $ProductivityEscrow$_fun_verifierPublicKey
+((slice, int, int, cell, cell), int) $ProductivityEscrow$_fun_verifierPublicKey((slice, int, int, cell, cell) $self) impure inline_ref;
+
+;; $MessageParameters$_constructor_bounce_to_value_mode_body
+((int, cell, int, slice, int)) $MessageParameters$_constructor_bounce_to_value_mode_body(int $bounce, slice $to, int $value, int $mode, cell $body) inline;
+
+;; $ProductivityEscrow$_fun_notify
+((slice, int, int, cell, cell), ()) $ProductivityEscrow$_fun_notify((slice, int, int, cell, cell) $self, cell $body) impure inline;
+
+;; $ProductivityEscrow$_fun_owner
+((slice, int, int, cell, cell), slice) $ProductivityEscrow$_fun_owner((slice, int, int, cell, cell) $self) impure inline_ref;
+
+;; $ChallengeData$_constructor_sponsor_beneficiary_challengeId_totalDeposit_totalCheckpoints_amountPerCheckpoint_claimedCount_endDate_active
+((slice, slice, slice, int, int, int, int, int, int)) $ChallengeData$_constructor_sponsor_beneficiary_challengeId_totalDeposit_totalCheckpoints_amountPerCheckpoint_claimedCount_endDate_active(slice $sponsor, slice $beneficiary, slice $challengeId, int $totalDeposit, int $totalCheckpoints, int $amountPerCheckpoint, int $claimedCount, int $endDate, int $active) inline;
+
+;; $SendParameters$_constructor_to_value_mode_body
+((int, cell, cell, cell, int, slice, int)) $SendParameters$_constructor_to_value_mode_body(slice $to, int $value, int $mode, cell $body) inline;
+
+;; $DeployOk$_constructor_queryId
+((int)) $DeployOk$_constructor_queryId(int $queryId) inline;
+
+
+;; ProductivityEscrow_ProductivityEscrow.stdlib.fc
+global (int, slice, int, slice) __tact_context;
+global slice __tact_context_sender;
+global cell __tact_child_contract_codes;
+global int __tact_randomized;
+
+(int, slice, int, slice) __tact_context_get() inline {
+    return __tact_context;
+}
+
+slice __tact_context_get_sender() inline {
+    return __tact_context_sender;
+}
+
+forall X0, X1, X2, X3, X4, X5, X6, X7, X8 -> tuple __tact_tuple_create_9((X0, X1, X2, X3, X4, X5, X6, X7, X8) v) asm """
+    9 TUPLE
+""";
+
+forall X0, X1, X2, X3, X4, X5, X6, X7, X8 -> (X0, X1, X2, X3, X4, X5, X6, X7, X8) __tact_tuple_destroy_9(tuple v) asm """
+    9 UNTUPLE
+""";
+
+int __tact_dict_get_int_int(cell d, int kl, int k, int vl) inline {
+    var (r, ok) = idict_get?(d, kl, k);
+    if (ok) {
+        return r~load_int(vl);
+    } else {
+        return null();
+    }
+}
+
+(cell, ()) __tact_dict_set_int_int(cell d, int kl, int k, int v, int vl) inline {
+    if (null?(v)) {
+        var (r, ok) = idict_delete?(d, kl, k);
+        return (r, ());
+    } else {
+        return (idict_set_builder(d, kl, k, begin_cell().store_int(v, vl)), ());
+    }
+}
+
+cell __tact_dict_get_int_cell(cell d, int kl, int k) inline {
+    var (r, ok) = idict_get_ref?(d, kl, k);
+    if (ok) {
+        return r;
+    } else {
+        return null();
+    }
+}
+
+(cell, ()) __tact_dict_set_int_cell(cell d, int kl, int k, cell v) inline {
+    if (null?(v)) {
+        var (r, ok) = idict_delete?(d, kl, k);
+        return (r, ());
+    } else {
+        return (idict_set_ref(d, kl, k, v), ());
+    }
+}
+
+builder $global_beginCell() impure asm """
+    NEWC
+""";
+
+int $global_checkSignature(int $hash, slice $signature, int $publicKey) impure asm """
+    CHKSIGNU
+""";
+
+int $global_myBalance() impure asm """
+    BALANCE FIRST
+""";
+
+() $global_nativeReserve(int $amount, int $mode) impure asm """
+    RAWRESERVE
+""";
+
+() $global_message((int, cell, int, slice, int) $params) impure asm """
+    NEWC
+    b{01} STSLICECONST  // store tag = $0 and ihr_disabled = true
+    1 STI               // store `bounce`
+    b{000} STSLICECONST // store bounced = false and src = addr_none
+    STSLICE             // store `to`
+    SWAP
+    STGRAMS             // store `value`
+    106 PUSHINT         // 1 + 4 + 4 + 64 + 32 + 1
+    STZEROES
+    // → Stack state
+    // s0: Builder
+    // s1: `body`
+    // s2: `mode`
+    STDICT
+    ENDC
+    SWAP
+    SENDRAWMSG
+""";
+
+() $global_send((int, cell, cell, cell, int, slice, int) $params) impure asm """
+    NEWC
+    b{01} STSLICECONST  // store tag = $0 and ihr_disabled = true
+    1 STI               // store `bounce`
+    b{000} STSLICECONST // store bounced = false and src = addr_none
+    STSLICE             // store `to`
+    SWAP
+    STGRAMS             // store `value`
+    105 PUSHINT         // 1 + 4 + 4 + 64 + 32
+    STZEROES            // store currency_collection, ihr_fee, fwd_fee, created_lt and created_at
+    // → Stack state
+    // s0: Builder
+    // s1: `data`
+    // s2: `code`
+    // s3: `body`
+    // s4: `mode`
+
+    // Group 2: Placing the Builder after code and data, then checking those for nullability
+    s2 XCHG0
+    DUP2
+    ISNULL
+    SWAP
+    ISNULL
+    AND
+    // → Stack state
+    // s0: -1 (true) if `data` and `code` are both null, 0 (false) otherwise
+    // s1: `code`
+    // s2: `data`
+    // s3: Builder
+    // s4: `body`
+    // s5: `mode`
+
+    // Group 3: Left branch of the IFELSE, executed if s0 is -1 (true)
+    <{
+        DROP2 // drop `data` and `code`, since either of those is null
+        b{0} STSLICECONST
+    }> PUSHCONT
+
+    // Group 3: Right branch of the IFELSE, executed if s0 is 0 (false)
+    <{
+        // _ split_depth:(Maybe (## 5))
+        //   special:(Maybe TickTock)
+        //   code:(Maybe ^Cell)
+        //   data:(Maybe ^Cell)
+        //   library:(Maybe ^Cell)
+        // = StateInit;
+        ROT                // place message Builder on top
+        b{10} STSLICECONST // store Maybe = true, Either = false
+        // Start composing inlined StateInit
+        b{00} STSLICECONST // store split_depth and special first
+        STDICT             // store code
+        STDICT             // store data
+        b{0} STSLICECONST  // store library
+    }> PUSHCONT
+
+    // Group 3: IFELSE that does the branching shown above
+    IFELSE
+    // → Stack state
+    // s0: Builder
+    // s1: null or StateInit
+    // s2: `body`
+    // s3: `mode`
+
+    // Group 4: Finalizing the message
+    STDICT // store `body` as ref with an extra Maybe bit, since `body` might be null
+    ENDC
+    // → Stack state
+    // s0: Cell
+    // s1: `mode`
+
+    // Group 5: Sending the message, with `mode` on top
+    SWAP
+    SENDRAWMSG // https://github.com/tact-lang/tact/issues/1558
+""";
+
+int $global_now() impure asm """
+    NOW
+""";
+
+cell $Builder$_fun_endCell(builder $self) impure asm """
+    ENDC
+""";
+
+builder $Builder$_fun_storeAddress(builder $self, slice $address) impure asm """
+    STSLICER
+""";
+
+int $Cell$_fun_hash(cell $self) impure asm """
+    HASHCU
+""";
+
+((slice, int, int, cell, cell), ()) $ProductivityEscrow$_fun_notify((slice, int, int, cell, cell) $self, cell $body) impure inline {
+    var (($self'owner, $self'verifierPublicKey, $self'challengeCount, $self'challenges, $self'claimedCheckpoints)) = $self;
+    slice $to = __tact_context_get_sender();
+    int $bounce = false;
+    if (false) {
+        int $balance = $global_myBalance();
+        int $balanceBeforeMessage = ($balance - $Context$_get_value(__tact_context_get()));
+        if (($balanceBeforeMessage < 0)) {
+            $global_nativeReserve(0, 0);
+            $global_message($MessageParameters$_constructor_bounce_to_value_mode_body($bounce, $to, 0, 130, $body));
+            return (($self'owner, $self'verifierPublicKey, $self'challengeCount, $self'challenges, $self'claimedCheckpoints), ());
+        }
+    }
+    $global_message($MessageParameters$_constructor_bounce_to_value_mode_body($bounce, $to, 0, 66, $body));
+    return (($self'owner, $self'verifierPublicKey, $self'challengeCount, $self'challenges, $self'claimedCheckpoints), ());
+}
+
+((slice, int, int, cell, cell), slice) $ProductivityEscrow$_fun_owner((slice, int, int, cell, cell) $self) impure inline_ref {
+    var (($self'owner, $self'verifierPublicKey, $self'challengeCount, $self'challenges, $self'claimedCheckpoints)) = $self;
+    var $fresh$ret_4 = $self'owner;
+    return (($self'owner, $self'verifierPublicKey, $self'challengeCount, $self'challenges, $self'claimedCheckpoints), $fresh$ret_4);
+}
+
+;; ProductivityEscrow_ProductivityEscrow.constants.fc
+;; Cell c8zkE3wTq1btSjLeLplIJBWObDDNK3UQE87Yvly8/RQ=
+cell __gen_cell_cell_73cce4137c13ab56ed4a32de2e994824158e6c30cd2b751013ced8be5cbcfd14() asm """
+    B{b5ee9c7241010101001700002a00000000436865636b706f696e7420726577617264a2e172d4} B>boc PUSHREF
+""";
+
+;; Cell wXVuG6AuVG0Sl1ylkRFO5h1YxtmLcJPhfYbnNM+RzUk=
+cell __gen_cell_cell_c1756e1ba02e546d12975ca591114ee61d58c6d98b7093e17d86e734cf91cd49() asm """
+    B{b5ee9c7241010101001600002800000000556e636c61696d656420726566756e64611f35e5} B>boc PUSHREF
+""";
+
+;; ProductivityEscrow_ProductivityEscrow.storage.fc
+;;
+;; Type: Context
+;; TLB: _ bounceable:bool sender:address value:int257 raw:^slice = Context
+;;
+
+_ $Context$_get_value((int, slice, int, slice) v) inline {
+    var (v'bounceable, v'sender, v'value, v'raw) = v;
+    return v'value;
+}
+
+;;
+;; Type: SendParameters
+;; TLB: _ mode:int257 body:Maybe ^cell code:Maybe ^cell data:Maybe ^cell value:int257 to:address bounce:bool = SendParameters
+;;
+
+((int, cell, cell, cell, int, slice, int)) $SendParameters$_constructor_to_value_mode_body(slice $to, int $value, int $mode, cell $body) inline {
+    return ($mode, $body, null(), null(), $value, $to, true);
+}
+
+;;
+;; Type: MessageParameters
+;; TLB: _ mode:int257 body:Maybe ^cell value:int257 to:address bounce:bool = MessageParameters
+;;
+
+((int, cell, int, slice, int)) $MessageParameters$_constructor_bounce_to_value_mode_body(int $bounce, slice $to, int $value, int $mode, cell $body) inline {
+    return ($mode, $body, $value, $to, $bounce);
+}
+
+;;
+;; Type: DeployOk
+;; Header: 0xaff90f57
+;; TLB: deploy_ok#aff90f57 queryId:uint64 = DeployOk
+;;
+
+builder $DeployOk$_store(builder build_0, (int) v) inline {
+    var (v'queryId) = v;
+    build_0 = store_uint(build_0, 2952335191, 32);
+    build_0 = build_0.store_uint(v'queryId, 64);
+    return build_0;
+}
+
+cell $DeployOk$_store_cell((int) v, builder b) inline {
+    return $DeployOk$_store(b, v).end_cell();
+}
+
+((int)) $DeployOk$_constructor_queryId(int $queryId) inline {
+    return ($queryId);
+}
+
+;;
+;; Type: ChallengeData
+;; TLB: _ sponsor:address beneficiary:address challengeId:^string totalDeposit:coins totalCheckpoints:uint32 amountPerCheckpoint:coins claimedCount:uint32 endDate:uint64 active:bool = ChallengeData
+;;
+
+builder $ChallengeData$_store(builder build_0, (slice, slice, slice, int, int, int, int, int, int) v) inline {
+    var (v'sponsor, v'beneficiary, v'challengeId, v'totalDeposit, v'totalCheckpoints, v'amountPerCheckpoint, v'claimedCount, v'endDate, v'active) = v;
+    build_0 = build_0.store_slice(v'sponsor);
+    build_0 = build_0.store_slice(v'beneficiary);
+    build_0 = build_0.store_builder_ref(begin_cell().store_slice(v'challengeId));
+    build_0 = build_0.store_varuint16(v'totalDeposit);
+    build_0 = build_0.store_uint(v'totalCheckpoints, 32);
+    build_0 = build_0.store_varuint16(v'amountPerCheckpoint);
+    build_0 = build_0.store_uint(v'claimedCount, 32);
+    build_0 = build_0.store_uint(v'endDate, 64);
+    build_0 = build_0.store_int(v'active, 1);
+    return build_0;
+}
+
+cell $ChallengeData$_store_cell((slice, slice, slice, int, int, int, int, int, int) v, builder b) inline {
+    return $ChallengeData$_store(b, v).end_cell();
+}
+
+(slice, ((slice, slice, slice, int, int, int, int, int, int))) $ChallengeData$_load(slice sc_0) inline {
+    var v'sponsor = sc_0~load_msg_addr();
+    var v'beneficiary = sc_0~load_msg_addr();
+    var v'challengeId = sc_0~load_ref().begin_parse();
+    var v'totalDeposit = sc_0~load_varuint16();
+    var v'totalCheckpoints = sc_0~load_uint(32);
+    var v'amountPerCheckpoint = sc_0~load_varuint16();
+    var v'claimedCount = sc_0~load_uint(32);
+    var v'endDate = sc_0~load_uint(64);
+    var v'active = sc_0~load_int(1);
+    return (sc_0, (v'sponsor, v'beneficiary, v'challengeId, v'totalDeposit, v'totalCheckpoints, v'amountPerCheckpoint, v'claimedCount, v'endDate, v'active));
+}
+
+tuple $ChallengeData$_as_optional((slice, slice, slice, int, int, int, int, int, int) v) inline {
+    var (v'sponsor, v'beneficiary, v'challengeId, v'totalDeposit, v'totalCheckpoints, v'amountPerCheckpoint, v'claimedCount, v'endDate, v'active) = v;
+    return __tact_tuple_create_9(v'sponsor, v'beneficiary, v'challengeId, v'totalDeposit, v'totalCheckpoints, v'amountPerCheckpoint, v'claimedCount, v'endDate, v'active);
+}
+
+tuple $ChallengeData$_load_opt(cell cl) inline {
+    if (null?(cl)) {
+        return null();
+    }
+    var sc = cl.begin_parse();
+    return $ChallengeData$_as_optional(sc~$ChallengeData$_load());
+}
+
+((slice, slice, slice, int, int, int, int, int, int)) $ChallengeData$_not_null(tuple v) inline {
+    throw_if(128, null?(v));
+    var (slice vvv'sponsor, slice vvv'beneficiary, slice vvv'challengeId, int vvv'totalDeposit, int vvv'totalCheckpoints, int vvv'amountPerCheckpoint, int vvv'claimedCount, int vvv'endDate, int vvv'active) = __tact_tuple_destroy_9(v);
+    return (vvv'sponsor, vvv'beneficiary, vvv'challengeId, vvv'totalDeposit, vvv'totalCheckpoints, vvv'amountPerCheckpoint, vvv'claimedCount, vvv'endDate, vvv'active);
+}
+
+tuple $ChallengeData$_to_tuple(((slice, slice, slice, int, int, int, int, int, int)) v) inline {
+    var (v'sponsor, v'beneficiary, v'challengeId, v'totalDeposit, v'totalCheckpoints, v'amountPerCheckpoint, v'claimedCount, v'endDate, v'active) = v;
+    return __tact_tuple_create_9(v'sponsor, v'beneficiary, v'challengeId, v'totalDeposit, v'totalCheckpoints, v'amountPerCheckpoint, v'claimedCount, v'endDate, v'active);
+}
+
+tuple $ChallengeData$_to_opt_tuple(tuple v) inline {
+    if (null?(v)) { return null(); } 
+    return $ChallengeData$_to_tuple($ChallengeData$_not_null(v)); 
+}
+
+tuple $ChallengeData$_to_opt_external(tuple v) inline {
+    var loaded = $ChallengeData$_to_opt_tuple(v);
+    if (null?(loaded)) {
+        return null();
+    } else {
+        return (loaded);
+    }
+}
+
+((slice, slice, slice, int, int, int, int, int, int)) $ChallengeData$_constructor_sponsor_beneficiary_challengeId_totalDeposit_totalCheckpoints_amountPerCheckpoint_claimedCount_endDate_active(slice $sponsor, slice $beneficiary, slice $challengeId, int $totalDeposit, int $totalCheckpoints, int $amountPerCheckpoint, int $claimedCount, int $endDate, int $active) inline {
+    return ($sponsor, $beneficiary, $challengeId, $totalDeposit, $totalCheckpoints, $amountPerCheckpoint, $claimedCount, $endDate, $active);
+}
+
+;;
+;; Type: ProductivityEscrow
+;; TLB: _ owner:address verifierPublicKey:uint256 challengeCount:uint32 challenges:dict<int, ^ChallengeData{sponsor:address,beneficiary:address,challengeId:^string,totalDeposit:coins,totalCheckpoints:uint32,amountPerCheckpoint:coins,claimedCount:uint32,endDate:uint64,active:bool}> claimedCheckpoints:dict<int, bool> = ProductivityEscrow
+;;
+
+builder $ProductivityEscrow$_store(builder build_0, (slice, int, int, cell, cell) v) inline {
+    var (v'owner, v'verifierPublicKey, v'challengeCount, v'challenges, v'claimedCheckpoints) = v;
+    build_0 = build_0.store_slice(v'owner);
+    build_0 = build_0.store_uint(v'verifierPublicKey, 256);
+    build_0 = build_0.store_uint(v'challengeCount, 32);
+    build_0 = build_0.store_dict(v'challenges);
+    build_0 = build_0.store_dict(v'claimedCheckpoints);
+    return build_0;
+}
+
+(slice, ((slice, int, int, cell, cell))) $ProductivityEscrow$_load(slice sc_0) inline {
+    var v'owner = sc_0~load_msg_addr();
+    var v'verifierPublicKey = sc_0~load_uint(256);
+    var v'challengeCount = sc_0~load_uint(32);
+    var v'challenges = sc_0~load_dict();
+    var v'claimedCheckpoints = sc_0~load_dict();
+    return (sc_0, (v'owner, v'verifierPublicKey, v'challengeCount, v'challenges, v'claimedCheckpoints));
+}
+
+(slice, ((slice, int))) $ProductivityEscrow$init$_load(slice sc_0) inline {
+    var v'owner = sc_0~load_msg_addr();
+    var v'verifierPublicKey = sc_0~load_int(257);
+    return (sc_0, (v'owner, v'verifierPublicKey));
+}
+
+(slice, int, int, cell, cell) $ProductivityEscrow$_contract_load() impure inline {
+    slice $sc = get_data().begin_parse();
+    int $loaded = $sc~load_int(1);
+    if ($loaded) {
+        return $sc~$ProductivityEscrow$_load();
+    }
+    else {
+        (slice $owner, int $verifierPublicKey) = $sc~$ProductivityEscrow$init$_load();
+        $sc.end_parse();
+        return $ProductivityEscrow$_contract_init($owner, $verifierPublicKey);
+    }
+}
+
+() $ProductivityEscrow$_contract_store((slice, int, int, cell, cell) v) impure inline {
+    builder b = begin_cell();
+    b = b.store_int(true, 1);
+    b = $ProductivityEscrow$_store(b, v);
+    set_data(b.end_cell());
+}
+
+;;
+;; Contract ProductivityEscrow functions
+;;
+
+(slice, int, int, cell, cell) $ProductivityEscrow$_contract_init(slice $owner, int $verifierPublicKey) impure inline {
+    var (($self'owner, $self'verifierPublicKey, $self'challengeCount, $self'challenges, $self'claimedCheckpoints)) = (null(), null(), 0, null(), null());
+    $self'owner = $owner;
+    $self'verifierPublicKey = $verifierPublicKey;
+    return ($self'owner, $self'verifierPublicKey, $self'challengeCount, $self'challenges, $self'claimedCheckpoints);
+}
+
+((slice, int, int, cell, cell), int) $ProductivityEscrow$_fun_challengeCount((slice, int, int, cell, cell) $self) impure inline_ref {
+    var (($self'owner, $self'verifierPublicKey, $self'challengeCount, $self'challenges, $self'claimedCheckpoints)) = $self;
+    var $fresh$ret_0 = $self'challengeCount;
+    return (($self'owner, $self'verifierPublicKey, $self'challengeCount, $self'challenges, $self'claimedCheckpoints), $fresh$ret_0);
+}
+
+((slice, int, int, cell, cell), tuple) $ProductivityEscrow$_fun_challenge((slice, int, int, cell, cell) $self, int $idx) impure inline_ref {
+    var (($self'owner, $self'verifierPublicKey, $self'challengeCount, $self'challenges, $self'claimedCheckpoints)) = $self;
+    var $fresh$ret_1 = $ChallengeData$_load_opt(__tact_dict_get_int_cell($self'challenges, 257, $idx));
+    return (($self'owner, $self'verifierPublicKey, $self'challengeCount, $self'challenges, $self'claimedCheckpoints), $fresh$ret_1);
+}
+
+((slice, int, int, cell, cell), int) $ProductivityEscrow$_fun_isCheckpointClaimed((slice, int, int, cell, cell) $self, int $challengeIdx, int $checkpointIdx) impure inline_ref {
+    var (($self'owner, $self'verifierPublicKey, $self'challengeCount, $self'challenges, $self'claimedCheckpoints)) = $self;
+    int $claimKey = $Cell$_fun_hash($Builder$_fun_endCell(store_uint(store_uint($global_beginCell(), $challengeIdx, 32), $checkpointIdx, 32)));
+    var $fresh$ret_2 = (~ null?(__tact_dict_get_int_int($self'claimedCheckpoints, 257, $claimKey, 1)));
+    return (($self'owner, $self'verifierPublicKey, $self'challengeCount, $self'challenges, $self'claimedCheckpoints), $fresh$ret_2);
+}
+
+((slice, int, int, cell, cell), int) $ProductivityEscrow$_fun_verifierPublicKey((slice, int, int, cell, cell) $self) impure inline_ref {
+    var (($self'owner, $self'verifierPublicKey, $self'challengeCount, $self'challenges, $self'claimedCheckpoints)) = $self;
+    var $fresh$ret_3 = $self'verifierPublicKey;
+    return (($self'owner, $self'verifierPublicKey, $self'challengeCount, $self'challenges, $self'claimedCheckpoints), $fresh$ret_3);
+}
+
+;;
+;; Get methods of a Contract ProductivityEscrow
+;;
+
+_ %challengeCount() method_id(80868) {
+    var self = $ProductivityEscrow$_contract_load();
+    var res = self~$ProductivityEscrow$_fun_challengeCount();
+    return res;
+}
+
+_ %challenge(int $idx) method_id(81975) {
+    int $idx = $idx;
+    var self = $ProductivityEscrow$_contract_load();
+    var res = self~$ProductivityEscrow$_fun_challenge($idx);
+    return $ChallengeData$_to_opt_external(res);
+}
+
+_ %isCheckpointClaimed(int $challengeIdx, int $checkpointIdx) method_id(96514) {
+    int $challengeIdx = $challengeIdx;
+    int $checkpointIdx = $checkpointIdx;
+    var self = $ProductivityEscrow$_contract_load();
+    var res = self~$ProductivityEscrow$_fun_isCheckpointClaimed($challengeIdx, $checkpointIdx);
+    return res;
+}
+
+_ %verifierPublicKey() method_id(101365) {
+    var self = $ProductivityEscrow$_contract_load();
+    var res = self~$ProductivityEscrow$_fun_verifierPublicKey();
+    return res;
+}
+
+_ %owner() method_id(83229) {
+    var self = $ProductivityEscrow$_contract_load();
+    var res = self~$ProductivityEscrow$_fun_owner();
+    return res;
+}
+
+;;
+;; Routing of a Contract ProductivityEscrow
+;;
+
+;; message opcode reader utility: only binary receivers
+;; Returns 32 bit message opcode, otherwise throws the "Invalid incoming message" exit code
+(slice, int) ~load_opcode_internal(slice s) asm( -> 1 0) "32 LDUQ 130 THROWIFNOT";
+
+() recv_internal(int msg_value, cell in_msg_cell, slice in_msg) impure {
+    
+    ;; Context
+    var cs = in_msg_cell.begin_parse();
+    cs~skip_bits(2);
+    var msg_bounceable = cs~load_int(1);
+    var msg_bounced = cs~load_int(1);
+    slice msg_sender_addr = cs~load_msg_addr();
+    __tact_context = (msg_bounceable, msg_sender_addr, msg_value, cs);
+    __tact_context_sender = msg_sender_addr;
+    
+    ;; Load contract data
+    var ($self'owner, $self'verifierPublicKey, $self'challengeCount, $self'challenges, $self'claimedCheckpoints) = $ProductivityEscrow$_contract_load();
+    
+    ;; Handle bounced messages
+    if (msg_bounced) { return (); }
+    var op = in_msg~load_opcode_internal();
+    ;; Receive CreateChallenge message
+    if (op == 4032046032) {
+        var $msg'beneficiary = in_msg~load_msg_addr();
+        var $msg'challengeId = in_msg~load_ref().begin_parse();
+        var $msg'totalCheckpoints = in_msg~load_uint(32);
+        var $msg'endDate = in_msg~load_uint(64);
+        var ($ctx'bounceable, $ctx'sender, $ctx'value, $ctx'raw) = __tact_context_get();
+        throw_unless(27888, ($ctx'value > 50000000));
+        throw_unless(28546, ($msg'totalCheckpoints > 0));
+        throw_unless(1619, ($msg'endDate > $global_now()));
+        int $deposit = ($ctx'value - 50000000);
+        int $amountPerCheckpoint = ($deposit / $msg'totalCheckpoints);
+        throw_unless(2253, ($amountPerCheckpoint > 0));
+        int $idx = $self'challengeCount;
+        $self'challenges~__tact_dict_set_int_cell(257, $idx, $ChallengeData$_store_cell($ChallengeData$_constructor_sponsor_beneficiary_challengeId_totalDeposit_totalCheckpoints_amountPerCheckpoint_claimedCount_endDate_active($ctx'sender, $msg'beneficiary, $msg'challengeId, $deposit, $msg'totalCheckpoints, $amountPerCheckpoint, 0, $msg'endDate, true), begin_cell()));
+        $self'challengeCount = ($idx + 1);
+        $ProductivityEscrow$_contract_store(($self'owner, $self'verifierPublicKey, $self'challengeCount, $self'challenges, $self'claimedCheckpoints));
+        return ();
+    }
+    
+    ;; Receive ClaimCheckpoint message
+    if (op == 2069244991) {
+        var $msg'challengeIdx = in_msg~load_uint(32);
+        var $msg'checkpointIndex = in_msg~load_uint(32);
+        var $msg'signature = in_msg~load_ref().begin_parse();
+        var ($ctx'bounceable, $ctx'sender, $ctx'value, $ctx'raw) = __tact_context_get();
+        tuple $challenge = $ChallengeData$_load_opt(__tact_dict_get_int_cell($self'challenges, 257, $msg'challengeIdx));
+        throw_unless(8346, (~ null?($challenge)));
+        var ($cd'sponsor, $cd'beneficiary, $cd'challengeId, $cd'totalDeposit, $cd'totalCheckpoints, $cd'amountPerCheckpoint, $cd'claimedCount, $cd'endDate, $cd'active) = $ChallengeData$_not_null($challenge);
+        throw_unless(8433, $cd'active);
+        throw_unless(55597, ( equal_slices_bits($ctx'sender, $cd'beneficiary) ));
+        throw_unless(61368, ($global_now() <= $cd'endDate));
+        throw_unless(43091, ($msg'checkpointIndex < $cd'totalCheckpoints));
+        int $claimKey = $Cell$_fun_hash($Builder$_fun_endCell(store_uint(store_uint($global_beginCell(), $msg'challengeIdx, 32), $msg'checkpointIndex, 32)));
+        throw_unless(57829, null?(__tact_dict_get_int_int($self'claimedCheckpoints, 257, $claimKey, 1)));
+        int $dataHash = $Cell$_fun_hash($Builder$_fun_endCell($Builder$_fun_storeAddress(store_uint(store_uint($global_beginCell(), $msg'challengeIdx, 32), $msg'checkpointIndex, 32), $cd'beneficiary)));
+        throw_unless(48401, $global_checkSignature($dataHash, $msg'signature, $self'verifierPublicKey));
+        $self'claimedCheckpoints~__tact_dict_set_int_int(257, $claimKey, true, 1);
+        int $newClaimedCount = ($cd'claimedCount + 1);
+        int $updatedActive = ($newClaimedCount < $cd'totalCheckpoints);
+        $self'challenges~__tact_dict_set_int_cell(257, $msg'challengeIdx, $ChallengeData$_store_cell($ChallengeData$_constructor_sponsor_beneficiary_challengeId_totalDeposit_totalCheckpoints_amountPerCheckpoint_claimedCount_endDate_active($cd'sponsor, $cd'beneficiary, $cd'challengeId, $cd'totalDeposit, $cd'totalCheckpoints, $cd'amountPerCheckpoint, $newClaimedCount, $cd'endDate, $updatedActive), begin_cell()));
+        $global_send($SendParameters$_constructor_to_value_mode_body($cd'beneficiary, $cd'amountPerCheckpoint, 1, __gen_cell_cell_73cce4137c13ab56ed4a32de2e994824158e6c30cd2b751013ced8be5cbcfd14()));
+        $ProductivityEscrow$_contract_store(($self'owner, $self'verifierPublicKey, $self'challengeCount, $self'challenges, $self'claimedCheckpoints));
+        return ();
+    }
+    
+    ;; Receive RefundUnclaimed message
+    if (op == 1892462292) {
+        var $msg'challengeIdx = in_msg~load_uint(32);
+        var ($ctx'bounceable, $ctx'sender, $ctx'value, $ctx'raw) = __tact_context_get();
+        tuple $challenge = $ChallengeData$_load_opt(__tact_dict_get_int_cell($self'challenges, 257, $msg'challengeIdx));
+        throw_unless(8346, (~ null?($challenge)));
+        var ($cd'sponsor, $cd'beneficiary, $cd'challengeId, $cd'totalDeposit, $cd'totalCheckpoints, $cd'amountPerCheckpoint, $cd'claimedCount, $cd'endDate, $cd'active) = $ChallengeData$_not_null($challenge);
+        throw_unless(17701, ( equal_slices_bits($ctx'sender, $cd'sponsor) ));
+        throw_unless(12222, ($global_now() > $cd'endDate));
+        throw_unless(62291, $cd'active);
+        int $unclaimedCheckpoints = ($cd'totalCheckpoints - $cd'claimedCount);
+        int $refundAmount = ($unclaimedCheckpoints * $cd'amountPerCheckpoint);
+        $self'challenges~__tact_dict_set_int_cell(257, $msg'challengeIdx, $ChallengeData$_store_cell($ChallengeData$_constructor_sponsor_beneficiary_challengeId_totalDeposit_totalCheckpoints_amountPerCheckpoint_claimedCount_endDate_active($cd'sponsor, $cd'beneficiary, $cd'challengeId, $cd'totalDeposit, $cd'totalCheckpoints, $cd'amountPerCheckpoint, $cd'claimedCount, $cd'endDate, false), begin_cell()));
+        if (($refundAmount > 0)) {
+            $global_send($SendParameters$_constructor_to_value_mode_body($cd'sponsor, $refundAmount, 1, __gen_cell_cell_c1756e1ba02e546d12975ca591114ee61d58c6d98b7093e17d86e734cf91cd49()));
+        }
+        $ProductivityEscrow$_contract_store(($self'owner, $self'verifierPublicKey, $self'challengeCount, $self'challenges, $self'claimedCheckpoints));
+        return ();
+    }
+    
+    ;; Receive Deploy message
+    if (op == 0x946a98b6) {
+        var $deploy'queryId = in_msg~load_uint(64);
+        ($self'owner, $self'verifierPublicKey, $self'challengeCount, $self'challenges, $self'claimedCheckpoints)~$ProductivityEscrow$_fun_notify($DeployOk$_store_cell($DeployOk$_constructor_queryId($deploy'queryId), begin_cell()));
+        $ProductivityEscrow$_contract_store(($self'owner, $self'verifierPublicKey, $self'challengeCount, $self'challenges, $self'claimedCheckpoints));
+        return ();
+    }
+    
+    ;; Throw if not handled
+    throw(130);
+}
+
+
+() __tact_selector_hack_asm() impure asm """
+@atend @ 1 {
+        execute current@ context@ current!
+        {
+            // The core idea of this function is to save gas by avoiding unnecessary dict jump, when recv_internal/recv_external is called
+            // We want to extract recv_internal/recv_external from the dict and select needed function
+            // not by jumping to the needed function by it's index, but by using usual IF statements.
+
+            }END> b> // Close previous builder, now we have a cell of previous code on top of the stack
+
+            <{ // Start of the new code builder
+                SETCP0
+                // Swap the new code builder with the previous code, now we have previous code on top of the stack
+                swap
+                // Transform cell to slice and load first ref from the previous code, now we have the dict on top of the stack
+                <s ref@
+
+                // Extract the recv_internal from the dict
+                dup 0 swap @procdictkeylen idict@ { "internal shortcut error" abort } ifnot
+                swap
+
+                // Delete the recv_internal from the dict
+                0 swap @procdictkeylen idict- drop
+                // Delete the recv_external from the dict (it's okay if it's not there)
+                -1 swap @procdictkeylen idict- drop
+                // Delete the __tact_selector_hack from the dict
+                65535 swap @procdictkeylen idict- drop
+
+                // Bring the code builder from the bottom of the stack
+                // because if recv_external extraction is optional, and the number of elements on the stack is not fixed
+                depth 1- roll
+                // Swap with the dict from which we extracted recv_internal and (maybe) recv_external
+                swap
+
+                // Check if the dict is empty
+                dup null?
+                // Store a copy of this flag in the bottom of the stack
+                dup depth 1- -roll
+                {
+                    // If the dict is empty, just drop it (it will be null if it's empty)
+                    drop
+                }
+                {
+                    // If the dict is not empty, prepare continuation to be stored in c3
+                    <{
+                        // Save this dict as first ref in this continuation, it will be pushed in runtime by DICTPUSHCONST
+                        swap @procdictkeylen DICTPUSHCONST
+                        // Jump to the needed function by it's index
+                        DICTIGETJMPZ
+                        // If such key is not found, throw 11 along with the key as an argument
+                        11 THROWARG
+                    }> PUSHCONT
+                    // Store the continuation in c3
+                    c3 POP
+                } cond
+
+                // Function id is on top of the (runtime) stack
+                DUP IFNOTJMP:<{
+                    // place recv_internal here
+                    DROP swap @addop
+                }>
+
+                // Bring back the flag, indicating if the dict is empty or not from the bottom of the stack
+                depth 1- roll
+                {
+                    // If the dict is empty, throw 11
+                    11 THROWARG
+                }
+                {
+                    // If the dict is not empty, jump to continuation from c3
+                    c3 PUSH JMPX
+                } cond
+            }> b>
+        } : }END>c
+        current@ context! current!
+    } does @atend !
+""";
+
+() __tact_selector_hack() method_id(65535) {
+    return __tact_selector_hack_asm();
+}
