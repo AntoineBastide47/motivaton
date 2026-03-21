@@ -1,5 +1,49 @@
 # BSA x TON - Stablecoins & Payments Hackathon Starter
 
+## Current Project State
+
+This repository is currently in a mixed state:
+
+- The codebase still primarily contains the original TON x402 hackathon starter implementation.
+- The product direction has pivoted toward a Telegram Mini App called `Motivaton`, described in [plan.md](/Users/antoinebastide/Documents/Github/Perso/motivaton/plan.md).
+- There is not yet a full codebase migration from the starter into the planned productivity escrow app.
+
+If you are an engineer or an LLM entering this repo, read these files first:
+
+1. [README.md](/Users/antoinebastide/Documents/Github/Perso/motivaton/README.md): what is actually implemented right now.
+2. [plan.md](/Users/antoinebastide/Documents/Github/Perso/motivaton/plan.md): the intended product direction and MVP scope.
+3. [AGENTS.md](/Users/antoinebastide/Documents/Github/Perso/motivaton/AGENTS.md): repository state, working rules, and the running log of substantial completed work.
+
+## Reality Check
+
+As of March 21, 2026:
+
+- `packages/` contains the reusable x402 TON packages: `core`, `client`, `middleware`, and `facilitator`.
+- `examples/nextjs-server/` is the main runnable app in the repo.
+- `examples/client-script/` contains end-to-end payment test scripts.
+- There is no implemented Telegram Mini App, productivity escrow backend, or smart contract for the new product direction yet.
+
+Use this README as the source of truth for what exists today in code. Use `plan.md` as the source of truth for what the project is trying to become.
+
+## Documentation Maintenance Rule
+
+When a substantial task is completed, update [AGENTS.md](/Users/antoinebastide/Documents/Github/Perso/motivaton/AGENTS.md) by adding a dedicated section for it under `Completed Substantial Tasks`.
+
+Substantial tasks include:
+
+- a new feature or user flow
+- a meaningful architecture change
+- a contract, backend, or frontend milestone
+- a deployment milestone
+- a major documentation or repo-structure cleanup
+
+Each section should briefly state:
+
+- date
+- what changed
+- current impact on the project state
+- important files or directories involved
+
 Welcome to the [BSA](https://bsaepfl.ch/) x [TON](https://ton.org/) **Stablecoins & Payments Hackathon** official starter kit!
 
 This starter was built by BSA members [Stan](https://github.com/hliosone) and [Loris](https://github.com/Loris-EPFL), feel free to reach out to Loris only for questions, bug reports, or anything else.

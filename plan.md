@@ -1,5 +1,21 @@
 # TON Hackathon Plan — Productivity Escrow Mini App
 
+## Status Note
+
+This file describes the target product direction for `Motivaton`.
+
+It does not describe the current implementation state of the repository by itself. The actual codebase is still largely the TON x402 hackathon starter described in [README.md](/Users/antoinebastide/Documents/Github/Perso/motivaton/README.md).
+
+Use this interpretation:
+
+- `README.md`: implemented today
+- `plan.md`: intended next product direction
+- `AGENTS.md`: quick repository state and the log of substantial completed tasks
+
+## Maintenance Rule
+
+When a substantial task from this plan is completed, add a dedicated section for it in [AGENTS.md](/Users/antoinebastide/Documents/Github/Perso/motivaton/AGENTS.md) under `Completed Substantial Tasks` so future contributors can quickly understand what has already been done.
+
 ## Project Summary
 
 **Working name:** GoalVault / StudyBond / Proof-to-Unlock
@@ -580,4 +596,3 @@ root/
     pitch-notes.md
     demo-script.md
   README.md
-
