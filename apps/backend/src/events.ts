@@ -57,7 +57,7 @@ export async function fetchUserEvents(username: string, token: string): Promise<
 
 /**
  * Groups events by action type, returning only those after `since`.
- * Does not deduplicate — caller should use filterAndMarkProcessed for that.
+ * Does not deduplicate — caller should use addChallengeEvents for that.
  */
 export function extractEvents(
   events: GitHubEvent[],

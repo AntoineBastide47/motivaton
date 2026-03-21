@@ -29,21 +29,11 @@ function getDb(): Database.Database {
       github_username TEXT
     );
 
-    CREATE TABLE IF NOT EXISTS progress (
-      challenge_idx INTEGER PRIMARY KEY,
-      count INTEGER NOT NULL DEFAULT 0
-    );
-
-    CREATE TABLE IF NOT EXISTS processed_events (
-      wallet_address TEXT NOT NULL,
+    CREATE TABLE IF NOT EXISTS challenge_events (
+      challenge_idx INTEGER NOT NULL,
       event_id TEXT NOT NULL,
-      action TEXT NOT NULL,
-      timestamp INTEGER NOT NULL,
-      PRIMARY KEY (wallet_address, event_id)
+      PRIMARY KEY (challenge_idx, event_id)
     );
-
-    CREATE INDEX IF NOT EXISTS idx_processed_events_timestamp
-      ON processed_events (timestamp);
   `);
 
   return db;
@@ -111,54 +101,26 @@ export function getAllAccounts(): Record<string, AppCredentials> {
   return result;
 }
 
-// -- Challenge progress: challengeIdx -> cumulative count --
+// -- Challenge events: per-challenge event tracking and deduplication --
 
-export function getProgress(challengeIdx: number): number {
-  const row = db().prepare("SELECT count FROM progress WHERE challenge_idx = ?").get(challengeIdx) as { count: number } | undefined;
-  return row?.count ?? 0;
-}
-
-export function addProgress(challengeIdx: number, increment: number) {
-  db().prepare(`
-    INSERT INTO progress (challenge_idx, count) VALUES (?, ?)
-    ON CONFLICT(challenge_idx) DO UPDATE SET count = count + excluded.count
-  `).run(challengeIdx, increment);
-}
-
-export function getAllProgress(): Record<string, number> {
-  const rows = db().prepare("SELECT challenge_idx, count FROM progress").all() as { challenge_idx: number; count: number }[];
-  const result: Record<string, number> = {};
-  for (const row of rows) {
-    result[String(row.challenge_idx)] = row.count;
-  }
-  return result;
-}
-
-// -- Processed event deduplication --
-
-export function filterAndMarkProcessed(
-  walletAddress: string,
-  eventIds: string[],
-  action: string,
-): string[] {
+export function addChallengeEvents(challengeIdx: number, eventIds: string[]): string[] {
   if (eventIds.length === 0) return [];
 
   const txn = db().transaction(() => {
     const placeholders = eventIds.map(() => "?").join(",");
     const existingRows = db().prepare(
-      `SELECT event_id FROM processed_events WHERE wallet_address = ? AND event_id IN (${placeholders})`,
-    ).all(walletAddress, ...eventIds) as { event_id: string }[];
+      `SELECT event_id FROM challenge_events WHERE challenge_idx = ? AND event_id IN (${placeholders})`,
+    ).all(challengeIdx, ...eventIds) as { event_id: string }[];
 
     const existingSet = new Set(existingRows.map((r) => r.event_id));
     const newIds = eventIds.filter((id) => !existingSet.has(id));
     if (newIds.length === 0) return [];
 
     const insert = db().prepare(
-      "INSERT OR IGNORE INTO processed_events (wallet_address, event_id, action, timestamp) VALUES (?, ?, ?, ?)",
+      "INSERT OR IGNORE INTO challenge_events (challenge_idx, event_id) VALUES (?, ?)",
     );
-    const now = Date.now();
     for (const id of newIds) {
-      insert.run(walletAddress, id, action, now);
+      insert.run(challengeIdx, id);
     }
 
     return newIds;
@@ -167,7 +129,21 @@ export function filterAndMarkProcessed(
   return txn();
 }
 
-export function cleanupProcessedEvents(maxAgeMs: number = 3600_000) {
-  const cutoff = Date.now() - maxAgeMs;
-  db().prepare("DELETE FROM processed_events WHERE timestamp < ?").run(cutoff);
+export function getChallengeProgress(challengeIdx: number): number {
+  const row = db().prepare("SELECT COUNT(*) as count FROM challenge_events WHERE challenge_idx = ?").get(challengeIdx) as { count: number };
+  return row.count;
+}
+
+export function getChallengeEvents(challengeIdx: number): string[] {
+  const rows = db().prepare("SELECT event_id FROM challenge_events WHERE challenge_idx = ?").all(challengeIdx) as { event_id: string }[];
+  return rows.map((r) => r.event_id);
+}
+
+export function getAllProgress(): Record<string, number> {
+  const rows = db().prepare("SELECT challenge_idx, COUNT(*) as count FROM challenge_events GROUP BY challenge_idx").all() as { challenge_idx: number; count: number }[];
+  const result: Record<string, number> = {};
+  for (const row of rows) {
+    result[String(row.challenge_idx)] = row.count;
+  }
+  return result;
 }

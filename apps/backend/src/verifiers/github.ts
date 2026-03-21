@@ -1,5 +1,5 @@
 import type { Verifier, VerifyRequest, VerificationResult } from "./types.js";
-import { getProgress } from "../store.js";
+import { getChallengeProgress } from "../store.js";
 
 /**
  * GitHub verifier — reads cumulative progress from the store.
@@ -26,7 +26,7 @@ export const githubVerifier: Verifier = {
       };
     }
 
-    const currentCount = getProgress(challengeIdx);
+    const currentCount = getChallengeProgress(challengeIdx);
     const verified = currentCount >= req.count;
 
     return {

@@ -1,7 +1,8 @@
 import express, { Router } from "express";
 import { createHmac, timingSafeEqual } from "crypto";
+import { Address } from "@ton/core";
 import { getAllChallenges } from "../chain.js";
-import { getAllAccounts, addProgress, filterAndMarkProcessed } from "../store.js";
+import { getAllAccounts, addChallengeEvents } from "../store.js";
 
 export const webhookRouter = Router();
 
@@ -10,7 +11,11 @@ function getWebhookSecret(): string {
 }
 
 function normalizeAddress(addr: string): string {
-  return addr.replace(/[-_]/g, (c) => (c === "-" ? "+" : "/"));
+  try {
+    return Address.parse(addr).toRawString();
+  } catch {
+    return addr.replace(/[-_]/g, (c) => (c === "-" ? "+" : "/"));
+  }
 }
 
 function verifySignature(payload: Buffer, signature: string): boolean {
@@ -82,12 +87,7 @@ webhookRouter.post("/github", express.raw({ type: "application/json" }), async (
   }
 
   const [wallet] = walletEntry;
-  const newIds = filterAndMarkProcessed(wallet, eventIds, action);
-
-  if (newIds.length === 0) {
-    res.json({ ok: true, skipped: "already processed" });
-    return;
-  }
+  const normWallet = normalizeAddress(wallet);
 
   let challenges;
   try {
@@ -99,7 +99,6 @@ webhookRouter.post("/github", express.raw({ type: "application/json" }), async (
   }
 
   const now = Date.now() / 1000;
-  const normWallet = normalizeAddress(wallet);
   let updated = 0;
 
   for (const c of challenges) {
@@ -108,10 +107,12 @@ webhookRouter.post("/github", express.raw({ type: "application/json" }), async (
     if (parts.length < 3 || parts[0] !== "GITHUB" || parts[1] !== action) continue;
     if (normalizeAddress(c.beneficiary) !== normWallet) continue;
 
-    addProgress(c.index, newIds.length);
-    updated++;
-    console.log(`[webhook] Challenge #${c.index}: +${newIds.length} ${action} by @${sender}`);
+    const newIds = addChallengeEvents(c.index, eventIds);
+    if (newIds.length > 0) {
+      updated++;
+      console.log(`[webhook] Challenge #${c.index}: +${newIds.length} ${action} by @${sender}`);
+    }
   }
 
-  res.json({ ok: true, processed: newIds.length, challengesUpdated: updated });
+  res.json({ ok: true, processed: eventIds.length, challengesUpdated: updated });
 });
