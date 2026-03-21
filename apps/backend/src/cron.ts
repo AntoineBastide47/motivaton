@@ -71,6 +71,12 @@ async function eventsProgressJob(lookbackMs: number) {
       const events = await fetchUserEvents(username, token);
       const eventsByAction = extractEvents(events, since);
 
+      if (eventsByAction["COMMIT"]) {
+        console.log(`[cron] @${username}: found ${eventsByAction["COMMIT"].length} commits: ${eventsByAction["COMMIT"].join(", ")}`);
+      } else {
+        console.log(`[cron] @${username}: no commits found in lookback window`);
+      }
+
       for (const [action, ids] of Object.entries(eventsByAction)) {
         const newIds = filterAndMarkProcessed(wallet, ids, action);
         if (newIds.length === 0) continue;
