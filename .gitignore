@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.next/
+.env
+examples/.env
+.env.local
+*.tsbuildinfo
+.idea/
+examples/nextjs-server/.env.local
+**/.DS_Store
