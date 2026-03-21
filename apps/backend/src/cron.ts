@@ -89,8 +89,16 @@ async function eventsProgressJob() {
 
     const pushEvents = allEvents.filter((e) => e.type === "PushEvent");
     console.log(`[cron] @${username}: ${allEvents.length} total events, ${pushEvents.length} PushEvents`);
-    for (const pe of pushEvents.slice(0, 5)) {
-      console.log(`[cron]   PushEvent created_at=${pe.created_at} commits=${pe.payload.commits?.length ?? 0}`);
+    if (pushEvents.length > 0) {
+      const raw = pushEvents[0] as any;
+      const commits = raw.payload?.commits;
+      console.log(`[cron]   PushEvent payload keys: ${JSON.stringify(Object.keys(raw.payload || {}))}`);
+      console.log(`[cron]   commits type=${typeof commits} isArray=${Array.isArray(commits)} length=${commits?.length}`);
+      if (Array.isArray(commits) && commits.length > 0) {
+        console.log(`[cron]   commit[0] keys: ${JSON.stringify(Object.keys(commits[0]))}`);
+        console.log(`[cron]   commit[0]: ${JSON.stringify(commits[0])}`);
+      }
+      console.log(`[cron]   Full payload: ${JSON.stringify(raw.payload).slice(0, 500)}`);
     }
 
     // Process each challenge for this user
