@@ -285,12 +285,155 @@ await octokit.request('POST /repos/{owner}/{repo}/hooks', {
   </github_api_guide>
 
   <leetcode_api_guide>
-    <goal></goal>
-    <authentication></authentication>
-    <endpoints></endpoints>
-    <polling></polling>
-    <webhooks></webhooks>
-    <javascript_instructions></javascript_instructions>
+    <goal>Track solved challenges, their difficulty, and when you solved them</goal>
+
+    <important_note>LeetCode has no official public API. Everything goes through their GraphQL endpoint and most useful data requires your session cookie (authentication).</important_note>
+
+    <authentication>
+      <type>Session cookie authentication</type>
+      <how>Log into leetcode.com, open DevTools, go to Application, then Cookies, and copy LEETCODE_SESSION</how>
+      <header>Cookie: LEETCODE_SESSION=your_session_value; csrftoken=your_csrf_token</header>
+      <warning>Session cookies expire and must be refreshed periodically</warning>
+      <security_note>Treat session cookies like secrets and never expose them to the client</security_note>
+    </authentication>
+
+    <endpoint>
+      <url>POST https://leetcode.com/graphql</url>
+      <content_type>application/json</content_type>
+    </endpoint>
+
+    <capabilities>
+      <capability>Read recent accepted submissions</capability>
+      <capability>Track solved problem count by difficulty</capability>
+      <capability>Read submission timestamps</capability>
+      <capability>Read detailed submission history with pagination</capability>
+      <capability>Detect newly solved problems by polling</capability>
+    </capabilities>
+
+    <queries>
+
+      <query name="recent accepted submissions">
+        <purpose>Get recent accepted submissions with timestamp</purpose>
+        <body><![CDATA[
+{
+  "query": "query recentAcSubmissions($username: String!, $limit: Int!) { recentAcSubmissionList(username: $username, limit: $limit) { id title titleSlug timestamp } }",
+  "variables": { "username": "your_username", "limit": 20 }
+}
+        ]]></body>
+        <returns>Last accepted submissions with Unix timestamp of when they were solved</returns>
+        <limit>Public, no auth needed, but capped at 20 results</limit>
+        <use_case>Best for polling every few minutes to detect new solves</use_case>
+      </query>
+
+      <query name="all solved problems with difficulty">
+        <purpose>Get solved count by Easy, Medium, and Hard</purpose>
+        <body><![CDATA[
+{
+  "query": "query userSolvedProblems($username: String!) { allQuestionsCount { difficulty count } matchedUser(username: $username) { submitStatsGlobal { acSubmissionNum { difficulty count } } problemsSolvedBeatsStats { difficulty percentage } } }",
+  "variables": { "username": "your_username" }
+}
+        ]]></body>
+        <returns>Count of solved Easy, Medium, and Hard problems</returns>
+        <auth_required>true</auth_required>
+      </query>
+
+      <query name="submission details with difficulty">
+        <purpose>Get full submission history, status, language, timestamp, and difficulty</purpose>
+        <body><![CDATA[
+{
+  "query": "query submissionList($offset: Int!, $limit: Int!, $lastKey: String) { submissionList(offset: $offset, limit: $limit, lastKey: $lastKey) { lastKey hasNext submissions { id title status timestamp lang question { difficulty } } } }",
+  "variables": { "offset": 0, "limit": 20, "lastKey": null }
+}
+        ]]></body>
+        <returns>Full submission history with difficulty, language, status, and Unix timestamp</returns>
+        <pagination>Paginate using lastKey from the response</pagination>
+        <auth_required>true</auth_required>
+      </query>
+
+    </queries>
+
+    <timestamp>
+      <format>Unix epoch in seconds</format>
+      <convert>new Date(timestamp * 1000).toISOString()</convert>
+    </timestamp>
+
+    <polling>
+      <needed>Yes</needed>
+      <note>No webhooks exist, so you must poll</note>
+      <tip>Poll the recent accepted submissions query every few minutes to detect new solves</tip>
+      <rate_limit>Be conservative because aggressive polling may be throttled or blocked</rate_limit>
+      <recommended_strategy>Use recent accepted submissions for lightweight checks, then use authenticated queries only when deeper verification is needed</recommended_strategy>
+    </polling>
+
+    <webhooks>
+      <needed>No</needed>
+      <note>No webhook support exists for this integration path</note>
+    </webhooks>
+
+    <api_calls>
+      <needed>Yes</needed>
+      <use_cases>
+        <case>Get recent accepted submissions</case>
+        <case>Get solved counts by difficulty</case>
+        <case>Get full submission history</case>
+        <case>Detect new solves since the last poll</case>
+        <case>Verify if a challenge threshold has been reached</case>
+      </use_cases>
+
+      <endpoint name="graphql endpoint">
+        <url>POST https://leetcode.com/graphql</url>
+        <purpose>Send GraphQL queries for all LeetCode data access</purpose>
+      </endpoint>
+    </api_calls>
+
+    <third_party_option>
+      <name>alfa-leetcode-api</name>
+      <url>https://github.com/alfaarghya/alfa-leetcode-api</url>
+      <note>Open-source wrapper around the GraphQL API with cleaner REST-style endpoints. Useful if you do not want to write raw GraphQL queries directly.</note>
+    </third_party_option>
+
+    <javascript_instructions>
+      <goal_for_llm>Generate JavaScript code that sends GraphQL POST requests to LeetCode, optionally authenticates with session cookies, polls recent accepted submissions, parses timestamps and difficulty data, and returns normalized solve events</goal_for_llm>
+      <preferred_runtime>Node.js with fetch</preferred_runtime>
+
+      <required_capabilities>
+        <item>Send POST requests to https://leetcode.com/graphql</item>
+        <item>Set Content-Type: application/json</item>
+        <item>Optionally include Cookie header with LEETCODE_SESSION and csrftoken</item>
+        <item>Run the recent accepted submissions query for lightweight polling</item>
+        <item>Run the solved problems query for difficulty totals</item>
+        <item>Run the submission list query for detailed history</item>
+        <item>Paginate using lastKey when hasNext is true</item>
+        <item>Convert Unix timestamps to ISO strings</item>
+        <item>Filter only accepted submissions when using detailed history</item>
+        <item>Return normalized solve records for storage or challenge checking</item>
+      </required_capabilities>
+
+      <headers_example><![CDATA[
+{
+  "Content-Type": "application/json",
+  "Cookie": "LEETCODE_SESSION=your_session_value; csrftoken=your_csrf_token"
+}
+      ]]></headers_example>
+
+      <normalized_output_example>
+        <field name="source">leetcode</field>
+        <field name="action">solve</field>
+        <field name="username">your_username</field>
+        <field name="title">Two Sum</field>
+        <field name="title_slug">two-sum</field>
+        <field name="difficulty">Easy</field>
+        <field name="status">AC</field>
+        <field name="language">javascript</field>
+        <field name="timestamp">2026-03-21T10:00:00Z</field>
+      </normalized_output_example>
+
+      <recommended_files>
+        <file>leetcodeApi.ts</file>
+        <file>leetcodePolling.ts</file>
+        <file>leetcodeVerifier.ts</file>
+      </recommended_files>
+    </javascript_instructions>
   </leetcode_api_guide>
 
   <duolingo_api_guide>
