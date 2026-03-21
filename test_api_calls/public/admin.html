@@ -35,7 +35,9 @@
 
     async function init() {
       const config = await fetch("/api/config/status").then(r => r.json());
+      const stravaConfig = await fetch("/api/strava/config/status").then(r => r.json());
       render(config);
+      renderStravaAdmin(stravaConfig);
     }
 
     function render(config) {
@@ -94,6 +96,70 @@
 
         if (res.ok) {
           msg.innerHTML = '<span class="success">✓ Saved! You can now go to the <a href="/">main app</a>.</span>';
+          setTimeout(() => init(), 500);
+        } else {
+          msg.innerHTML = `<span class="error">Error: ${res.error}</span>`;
+        }
+      });
+    }
+
+    function renderStravaAdmin(config) {
+      $app.insertAdjacentHTML("beforeend", `
+        <div class="card">
+          <h2>Current Strava Status</h2>
+          <p>Client ID: ${config.hasClientId
+            ? `<span class="badge badge-ok">configured</span> <code>${config.clientIdPreview}</code>`
+            : '<span class="badge badge-missing">missing</span>'}</p>
+          <p>Client Secret: ${config.hasClientSecret
+            ? '<span class="badge badge-ok">configured</span>'
+            : '<span class="badge badge-missing">missing</span>'}</p>
+        </div>
+
+        <div class="card">
+          <h2>Step 3 — Create a Strava API App</h2>
+          <p>Go to: <a href="https://www.strava.com/settings/api" target="_blank">strava.com/settings/api</a></p>
+          <p>Fill in:</p>
+          <table>
+            <tr><td>Application name</td><td><code>test-api-calls</code></td></tr>
+            <tr><td>Website</td><td><code>${location.origin}</code></td></tr>
+            <tr><td>Authorization Callback Domain</td><td><code>${location.host}</code></td></tr>
+            <tr><td>Redirect URI</td><td><code>${location.origin}/auth/strava/callback</code></td></tr>
+          </table>
+          <p class="hint">Save the app in Strava, then copy its client ID and client secret below.</p>
+        </div>
+
+        <div class="card">
+          <h2>Step 4 — Paste Strava Credentials</h2>
+          <label for="stravaClientId">Strava Client ID</label>
+          <input type="text" id="stravaClientId" placeholder="123456" />
+          <label for="stravaClientSecret">Strava Client Secret</label>
+          <input type="password" id="stravaClientSecret" placeholder="paste your Strava client secret" />
+          <p class="hint">Saved to <code>.env</code> on the server. Git-ignored.</p>
+          <br/>
+          <button id="saveStrava">Save Strava Config</button>
+          <p id="stravaMsg"></p>
+        </div>
+      `);
+
+      document.getElementById("saveStrava").addEventListener("click", async () => {
+        const clientId = document.getElementById("stravaClientId").value.trim();
+        const clientSecret = document.getElementById("stravaClientSecret").value.trim();
+        const msg = document.getElementById("stravaMsg");
+
+        if (!clientId || !clientSecret) {
+          msg.innerHTML = '<span class="error">Both Strava fields are required.</span>';
+          return;
+        }
+
+        msg.textContent = "Saving…";
+        const res = await fetch("/api/strava/config", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ clientId, clientSecret }),
+        }).then(r => r.json());
+
+        if (res.ok) {
+          msg.innerHTML = '<span class="success">✓ Saved! You can now go back to the <a href="/">main app</a> and sign in with Strava.</span>';
           setTimeout(() => init(), 500);
         } else {
           msg.innerHTML = `<span class="error">Error: ${res.error}</span>`;

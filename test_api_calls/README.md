@@ -55,5 +55,32 @@ npm run dev
 |GET|`/api/repos`|List your repositories|
 |GET|`/api/commits/:owner/:repo`|List commits for a repo|
 
+## Added Strava integration
+
+The local dashboard also now supports a Strava OAuth flow in parallel with GitHub and LeetCode.
+
+Use the admin page to save:
+
+* `STRAVA_CLIENT_ID`
+* `STRAVA_CLIENT_SECRET`
+
+Then connect from the main dashboard through the new `Strava` tab to view:
+
+* athlete profile details
+* YTD and all-time run / ride / swim totals
+* recent activities pulled from the official Strava API
+
+Additional Strava endpoints exposed locally:
+
+|Method|Path|Description|
+|-|-|-|
+|GET|`/api/strava/config/status`|Check whether Strava OAuth is configured|
+|POST|`/api/strava/config`|Save Strava Client ID and Secret to `.env`|
+|GET|`/auth/strava`|Start Strava OAuth flow|
+|GET|`/auth/strava/callback`|Strava OAuth redirect handler|
+|GET|`/api/strava/status`|Current Strava connection state|
+|POST|`/api/strava/disconnect`|Disconnect Strava from the current local session|
+|GET|`/api/strava/stats`|Fetch athlete totals from Strava|
+|GET|`/api/strava/activities`|Fetch recent athlete activities from Strava|
 
 

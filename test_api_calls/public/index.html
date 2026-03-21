@@ -87,6 +87,15 @@
     .lc-stat-card .num { font-size: 28px; font-weight: bold; color: #f0f6fc; }
     .lc-stat-card .lbl { font-size: 12px; color: #8b949e; }
 
+    .strava-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin: 12px 0 20px; }
+    .strava-stat-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 14px; }
+    .strava-stat-card .num { font-size: 28px; font-weight: 700; color: #fc5200; }
+    .strava-stat-card .lbl { font-size: 12px; color: #8b949e; margin-top: 4px; text-transform: uppercase; letter-spacing: 0.08em; }
+    .strava-activity { padding: 12px 0; border-bottom: 1px solid #21262d; display: grid; grid-template-columns: 1fr auto; gap: 12px; align-items: start; }
+    .strava-activity-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 6px; }
+    .strava-type { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #fc520022; color: #fc7a3c; font-size: 12px; font-weight: 600; }
+    .strava-time { color: #8b949e; font-size: 12px; white-space: nowrap; text-align: right; }
+
     .hint { font-size: 12px; color: #6e7681; margin-top: 4px; }
     .success { color: #3fb950; }
     .error { color: #f85149; }
@@ -107,6 +116,7 @@
         fetch("/api/me").then(r => r.json()),
         fetch("/api/leetcode/status").then(r => r.json()),
       ]);
+      const stravaStatus = await fetch("/api/strava/status").then(r => r.json());
 
       // Build layout with tabs
       $app.innerHTML = `
@@ -117,6 +127,8 @@
         <div id="tab-github" class="tab-content active"></div>
         <div id="tab-leetcode" class="tab-content"></div>
       `;
+      document.querySelector(".tabs").insertAdjacentHTML("beforeend", '<button class="tab" data-tab="strava">Strava</button>');
+      $app.insertAdjacentHTML("beforeend", '<div id="tab-strava" class="tab-content"></div>');
 
       // Tab switching
       document.querySelectorAll(".tab").forEach(tab => {
@@ -131,6 +143,13 @@
       // Render each tab
       renderGitHub(config, me);
       renderLeetCode(lcStatus);
+      renderStrava(stravaStatus);
+
+      const requestedTab = new URLSearchParams(location.search).get("tab");
+      if (requestedTab) {
+        const requestedButton = document.querySelector(`.tab[data-tab="${requestedTab}"]`);
+        if (requestedButton) requestedButton.click();
+      }
     }
 
     // ======================== GITHUB TAB ========================
@@ -505,6 +524,155 @@
       }
     }
 
+    // ======================== STRAVA TAB ========================
+    function renderStrava(stravaStatus) {
+      const $strava = document.getElementById("tab-strava");
+      if (!$strava) return;
+
+      if (!stravaStatus.configured) {
+        $strava.innerHTML = `
+          <div class="setup-msg">
+            <h2>Strava Not Configured</h2>
+            <p class="meta">Add your Strava OAuth credentials in <a href="/admin.html">Admin setup</a> to enable the integration.</p>
+          </div>`;
+        return;
+      }
+
+      if (!stravaStatus.connected) {
+        showStravaConnect($strava);
+        return;
+      }
+
+      showStravaDashboard($strava, stravaStatus);
+    }
+
+    function showStravaConnect($strava) {
+      $strava.innerHTML = `
+        <div class="setup-msg">
+          <h2>Strava</h2>
+          <p class="meta" style="margin-bottom:16px">Sign in with Strava to inspect your recent activities and athlete totals.</p>
+          <a href="/auth/strava" class="btn btn-primary" style="font-size:16px; padding: 12px 32px;">Login with Strava</a>
+        </div>`;
+    }
+
+    function showStravaDashboard($strava, stravaStatus) {
+      const athlete = stravaStatus.athlete || {};
+      const athleteName = [athlete.firstname, athlete.lastname].filter(Boolean).join(" ") || athlete.username || "Strava athlete";
+      const locationBits = [athlete.city, athlete.state, athlete.country].filter(Boolean);
+
+      $strava.innerHTML = `
+        <div class="card">
+          <div class="user-bar">
+            ${athlete.profile ? `<img src="${athlete.profile}" width="40" height="40" />` : ""}
+            <div>
+              <strong>${esc(athleteName)}</strong>
+              <span class="meta">
+                ${athlete.username ? `@${esc(athlete.username)} · ` : ""}Strava
+                ${stravaStatus.scope ? ` · ${esc(stravaStatus.scope)}` : ""}
+                ${locationBits.length ? `<br/>${esc(locationBits.join(", "))}` : ""}
+              </span>
+            </div>
+            <div style="margin-left:auto; display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+              ${athlete.profileUrl ? `<a href="${athlete.profileUrl}" target="_blank" class="btn btn-secondary btn-sm">Open profile</a>` : ""}
+              <button class="btn btn-danger btn-sm" id="stravaDisconnect">Disconnect</button>
+            </div>
+          </div>
+        </div>
+        <div id="stravaStats">Loading stats…</div>
+        <h2>Recent Activities</h2>
+        <div id="stravaActivities">Loading activities…</div>
+      `;
+
+      document.getElementById("stravaDisconnect").addEventListener("click", async () => {
+        await fetch("/api/strava/disconnect", { method: "POST" });
+        showStravaConnect($strava);
+      });
+
+      loadStravaStats();
+      loadStravaActivities();
+    }
+
+    async function loadStravaStats() {
+      const div = document.getElementById("stravaStats");
+      if (!div) return;
+
+      try {
+        const data = await fetch("/api/strava/stats").then(r => r.json());
+        if (data.error) {
+          div.innerHTML = `<p class="error">${esc(data.error)}</p>`;
+          return;
+        }
+
+        const cards = [
+          buildStravaStatCard("YTD Runs", data.ytd_run_totals),
+          buildStravaStatCard("YTD Rides", data.ytd_ride_totals),
+          buildStravaStatCard("YTD Swims", data.ytd_swim_totals),
+          buildStravaStatCard("All Runs", data.all_run_totals),
+          buildStravaStatCard("All Rides", data.all_ride_totals),
+          buildStravaStatCard("All Swims", data.all_swim_totals),
+        ].filter(Boolean).join("");
+
+        div.innerHTML = cards
+          ? `<div class="strava-grid">${cards}</div>`
+          : '<p class="meta">No Strava totals were returned for this athlete.</p>';
+      } catch (e) {
+        div.innerHTML = `<p class="error">Failed to load: ${esc(e.message)}</p>`;
+      }
+    }
+
+    function buildStravaStatCard(label, totals) {
+      if (!totals) return "";
+      return `
+        <div class="strava-stat-card">
+          <div class="num">${totals.count || 0}</div>
+          <div class="lbl">${esc(label)}</div>
+          <p class="hint">${formatDistance(totals.distance || 0)} · ${formatDuration(totals.moving_time || 0)}</p>
+        </div>`;
+    }
+
+    async function loadStravaActivities() {
+      const div = document.getElementById("stravaActivities");
+      if (!div) return;
+
+      try {
+        const activities = await fetch("/api/strava/activities?per_page=12").then(r => r.json());
+        if (activities.error) {
+          div.innerHTML = `<p class="error">${esc(activities.error)}</p>`;
+          return;
+        }
+        if (!activities.length) {
+          div.innerHTML = '<p class="meta">No recent Strava activities were returned.</p>';
+          return;
+        }
+
+        div.innerHTML = activities.map((activity) => {
+          const metrics = [
+            formatDistance(activity.distanceMeters || 0),
+            formatDuration(activity.movingTime || 0),
+            activity.elevationGain ? `${Math.round(activity.elevationGain)} m elevation` : null,
+            activity.kudosCount ? `${activity.kudosCount} kudos` : null,
+          ].filter(Boolean);
+
+          return `
+            <div class="strava-activity">
+              <div>
+                <div class="strava-activity-title">
+                  <span class="strava-type">${esc(activity.sportType || activity.type || "Activity")}</span>
+                  ${activity.url
+                    ? `<a href="${activity.url}" target="_blank">${esc(activity.name || "Untitled activity")}</a>`
+                    : `<strong>${esc(activity.name || "Untitled activity")}</strong>`}
+                  ${activity.private ? '<span class="meta">Private</span>' : ""}
+                </div>
+                <div class="meta">${metrics.join(" · ")}</div>
+              </div>
+              <div class="strava-time">${relTime(activity.startDate)}</div>
+            </div>`;
+        }).join("");
+      } catch (e) {
+        div.innerHTML = `<p class="error">Failed to load: ${esc(e.message)}</p>`;
+      }
+    }
+
     // ======================== UTILS ========================
     function esc(str) {
       if (!str) return "";
@@ -523,6 +691,20 @@
       const days = Math.floor(hrs / 24);
       if (days < 30) return `${days}d ago`;
       return new Date(dateStr).toLocaleDateString();
+    }
+
+    function formatDistance(distanceMeters) {
+      if (!distanceMeters) return "0 km";
+      return `${(distanceMeters / 1000).toFixed(distanceMeters >= 10000 ? 0 : 1)} km`;
+    }
+
+    function formatDuration(seconds) {
+      if (!seconds) return "0m";
+      const hrs = Math.floor(seconds / 3600);
+      const mins = Math.round((seconds % 3600) / 60);
+      if (!hrs) return `${mins}m`;
+      if (!mins) return `${hrs}h`;
+      return `${hrs}h ${mins}m`;
     }
 
     init();

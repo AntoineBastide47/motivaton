@@ -213,3 +213,26 @@ Key files:
 
 Follow-up gaps:
 - This still depends on polling the chain getter and therefore inherits the same timeout behavior as the indexing wait flow.
+
+### 2026-03-21 - Strava Added To API Test Dashboard
+
+Summary:
+- Extended the standalone `test_api_calls` sandbox with an additive Strava integration alongside the existing GitHub and LeetCode flows.
+- Added Strava OAuth configuration and callback handling, session-backed athlete storage, stats and recent-activity routes, and matching browser UI in the dashboard and admin setup page.
+- Documented the new Strava environment variables and local endpoints for future contributors.
+
+Why it matters now:
+- The repo now has a runnable official-API Strava path for experimenting with productivity verification sources without removing the earlier GitHub or LeetCode work.
+- Contributors evaluating supported integrations can use the sandbox to validate Strava auth and activity data before wiring it into the main product surfaces.
+
+Key files:
+- `test_api_calls/server.js`
+- `test_api_calls/public/index.html`
+- `test_api_calls/public/admin.html`
+- `test_api_calls/.env.example`
+- `test_api_calls/README.md`
+- `AGENTS.md`
+
+Follow-up gaps:
+- Chess.com is still only documented in `apis.md` and is not yet exposed in the same dashboard UI.
+- The Strava flow currently focuses on recent activities and totals; webhook handling and challenge-specific verification logic are still future work.

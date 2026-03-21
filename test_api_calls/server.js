@@ -27,6 +27,30 @@ function saveEnv(vars) {
 const initialEnv = loadEnv();
 Object.assign(process.env, initialEnv);
 
+const BUILT_IN_PROVIDER_ENV = {
+  // Prototype-friendly owner config so end users only need to click "Login with Strava".
+  STRAVA_CLIENT_ID: "214580",
+  STRAVA_CLIENT_SECRET: "8fe93ee3efd2eec42de8d8de382cb044763bdf1d",
+};
+
+Object.entries(BUILT_IN_PROVIDER_ENV).forEach(([key, value]) => {
+  if (!process.env[key]) {
+    process.env[key] = value;
+  }
+});
+
+const loadEnvFromFile = loadEnv;
+loadEnv = function loadEnvWithOwnerFallback() {
+  const vars = loadEnvFromFile();
+  if (!vars.STRAVA_CLIENT_ID && process.env.STRAVA_CLIENT_ID) {
+    vars.STRAVA_CLIENT_ID = process.env.STRAVA_CLIENT_ID;
+  }
+  if (!vars.STRAVA_CLIENT_SECRET && process.env.STRAVA_CLIENT_SECRET) {
+    vars.STRAVA_CLIENT_SECRET = process.env.STRAVA_CLIENT_SECRET;
+  }
+  return vars;
+};
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
@@ -57,10 +81,52 @@ async function ghFetch(url, token) {
   return res.json();
 }
 
+async function stravaTokenRequest(params) {
+  const body = new URLSearchParams(params);
+  const res = await fetch("https://www.strava.com/oauth/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body,
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Strava OAuth ${res.status}: ${text}`);
+  }
+  return res.json();
+}
+
+function summarizeStravaAthlete(athlete) {
+  if (!athlete) return null;
+  return {
+    id: athlete.id,
+    username: athlete.username || null,
+    firstname: athlete.firstname || null,
+    lastname: athlete.lastname || null,
+    city: athlete.city || null,
+    state: athlete.state || null,
+    country: athlete.country || null,
+    profile: athlete.profile_medium || athlete.profile || null,
+    profileUrl: athlete.id ? `https://www.strava.com/athletes/${athlete.id}` : null,
+  };
+}
+
 function getSession(req) {
   const cookie = req.headers.cookie || "";
   const match = cookie.match(/session=([^;]+)/);
   return match ? sessions[match[1]] : null;
+}
+
+function appendSetCookieHeader(res, cookieValue) {
+  const existing = res.getHeader("Set-Cookie");
+  if (!existing) {
+    res.setHeader("Set-Cookie", cookieValue);
+    return;
+  }
+  if (Array.isArray(existing)) {
+    res.setHeader("Set-Cookie", [...existing, cookieValue]);
+    return;
+  }
+  res.setHeader("Set-Cookie", [existing, cookieValue]);
 }
 
 function getEnvConfig() {
@@ -74,6 +140,78 @@ function getEnvConfig() {
       : null,
     port: env.PORT || "3000",
   };
+}
+
+function getStravaConfig() {
+  const env = loadEnv();
+  return {
+    configured: !!(env.STRAVA_CLIENT_ID && env.STRAVA_CLIENT_SECRET),
+    hasClientId: !!env.STRAVA_CLIENT_ID,
+    hasClientSecret: !!env.STRAVA_CLIENT_SECRET,
+    clientIdPreview: env.STRAVA_CLIENT_ID
+      ? env.STRAVA_CLIENT_ID.substring(0, 6) + "…"
+      : null,
+    port: env.PORT || "3000",
+  };
+}
+
+function getStravaRedirectUri() {
+  return `http://localhost:${PORT}/auth/strava/callback`;
+}
+
+async function refreshStravaSession(session) {
+  if (!session || !session.strava || !session.strava.refreshToken) {
+    throw new Error("Strava refresh token missing. Reconnect your Strava account.");
+  }
+  if (!process.env.STRAVA_CLIENT_ID || !process.env.STRAVA_CLIENT_SECRET) {
+    throw new Error("Strava OAuth is not configured.");
+  }
+
+  const tokenData = await stravaTokenRequest({
+    client_id: process.env.STRAVA_CLIENT_ID,
+    client_secret: process.env.STRAVA_CLIENT_SECRET,
+    grant_type: "refresh_token",
+    refresh_token: session.strava.refreshToken,
+  });
+
+  session.strava = {
+    ...session.strava,
+    accessToken: tokenData.access_token,
+    refreshToken: tokenData.refresh_token || session.strava.refreshToken,
+    expiresAt: tokenData.expires_at ? tokenData.expires_at * 1000 : session.strava.expiresAt,
+    scope: tokenData.scope || session.strava.scope || null,
+    athlete: summarizeStravaAthlete(tokenData.athlete) || session.strava.athlete || null,
+  };
+}
+
+async function stravaFetch(pathname, session, query = null) {
+  if (!session || !session.strava || !session.strava.accessToken) {
+    throw new Error("Strava account not connected.");
+  }
+
+  if (session.strava.expiresAt && Date.now() >= session.strava.expiresAt - 60000) {
+    await refreshStravaSession(session);
+  }
+
+  const suffix = query ? `?${new URLSearchParams(query)}` : "";
+  const request = () => fetch(`https://www.strava.com/api/v3${pathname}${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${session.strava.accessToken}`,
+    },
+  });
+
+  let res = await request();
+  if (res.status === 401 && session.strava.refreshToken) {
+    await refreshStravaSession(session);
+    res = await request();
+  }
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Strava API ${res.status}: ${text}`);
+  }
+
+  return res.json();
 }
 
 // --------------- admin config routes ---------------
@@ -98,6 +236,29 @@ app.post("/api/config", (req, res) => {
   process.env.GITHUB_CLIENT_SECRET = env.GITHUB_CLIENT_SECRET;
 
   res.json({ ok: true, config: getEnvConfig() });
+});
+
+app.get("/api/strava/config/status", (req, res) => {
+  res.json(getStravaConfig());
+});
+
+app.post("/api/strava/config", (req, res) => {
+  const { clientId, clientSecret } = req.body;
+  if (!clientId || !clientSecret) {
+    return res.status(400).json({ error: "clientId and clientSecret are required" });
+  }
+
+  const env = loadEnv();
+  env.STRAVA_CLIENT_ID = clientId.trim();
+  env.STRAVA_CLIENT_SECRET = clientSecret.trim();
+  if (!env.PORT) env.PORT = String(PORT);
+  if (!env.SESSION_SECRET) env.SESSION_SECRET = crypto.randomBytes(16).toString("hex");
+  saveEnv(env);
+
+  process.env.STRAVA_CLIENT_ID = env.STRAVA_CLIENT_ID;
+  process.env.STRAVA_CLIENT_SECRET = env.STRAVA_CLIENT_SECRET;
+
+  res.json({ ok: true, config: getStravaConfig() });
 });
 
 // --------------- OAuth routes ---------------
@@ -168,6 +329,62 @@ app.get("/auth/github/callback", async (req, res) => {
   }
 });
 
+app.get("/auth/strava", (req, res) => {
+  if (!process.env.STRAVA_CLIENT_ID) {
+    return res.status(400).send("Strava OAuth not configured. Ask the admin to set it up.");
+  }
+
+  const state = crypto.randomBytes(16).toString("hex");
+  const params = new URLSearchParams({
+    client_id: process.env.STRAVA_CLIENT_ID,
+    redirect_uri: getStravaRedirectUri(),
+    response_type: "code",
+    approval_prompt: "auto",
+    scope: "read,activity:read_all",
+    state,
+  });
+
+  res.setHeader("Set-Cookie", `strava_state=${state}; HttpOnly; Path=/; Max-Age=300`);
+  res.redirect(`https://www.strava.com/oauth/authorize?${params}`);
+});
+
+app.get("/auth/strava/callback", async (req, res) => {
+  try {
+    const { code, state, error } = req.query;
+    if (error) {
+      return res.status(400).send(`Strava OAuth error: ${error}`);
+    }
+
+    const cookie = req.headers.cookie || "";
+    const savedState = (cookie.match(/strava_state=([^;]+)/) || [])[1];
+    if (!state || state !== savedState) {
+      return res.status(403).send("State mismatch — possible CSRF.");
+    }
+
+    const tokenData = await stravaTokenRequest({
+      client_id: process.env.STRAVA_CLIENT_ID,
+      client_secret: process.env.STRAVA_CLIENT_SECRET,
+      code,
+      grant_type: "authorization_code",
+    });
+
+    const session = ensureSession(req, res);
+    session.strava = {
+      accessToken: tokenData.access_token,
+      refreshToken: tokenData.refresh_token,
+      expiresAt: tokenData.expires_at ? tokenData.expires_at * 1000 : null,
+      scope: tokenData.scope || null,
+      athlete: summarizeStravaAthlete(tokenData.athlete),
+    };
+
+    appendSetCookieHeader(res, "strava_state=; HttpOnly; Path=/; Max-Age=0");
+    res.redirect("/?tab=strava");
+  } catch (err) {
+    console.error("Strava OAuth callback error:", err);
+    res.status(500).send("Strava OAuth failed: " + err.message);
+  }
+});
+
 app.get("/api/me", (req, res) => {
   const session = getSession(req);
   if (!session) return res.json({ loggedIn: false });
@@ -179,6 +396,26 @@ app.get("/api/me", (req, res) => {
     profileUrl: session.profileUrl,
     publicRepos: session.publicRepos,
     followers: session.followers,
+  });
+});
+
+app.get("/api/strava/status", (req, res) => {
+  const session = getSession(req);
+  const config = getStravaConfig();
+
+  if (!session || !session.strava) {
+    return res.json({
+      configured: config.configured,
+      connected: false,
+    });
+  }
+
+  res.json({
+    configured: config.configured,
+    connected: true,
+    athlete: session.strava.athlete,
+    scope: session.strava.scope || null,
+    expiresAt: session.strava.expiresAt || null,
   });
 });
 
@@ -476,6 +713,73 @@ app.get("/api/leetcode/status", (req, res) => {
   });
 });
 
+// =============== STRAVA ROUTES ===============
+
+app.post("/api/strava/disconnect", (req, res) => {
+  const session = getSession(req);
+  if (session) delete session.strava;
+  res.json({ ok: true });
+});
+
+app.get("/api/strava/stats", async (req, res) => {
+  const session = getSession(req);
+  if (!session || !session.strava) {
+    return res.status(401).json({ error: "Strava account not connected." });
+  }
+
+  try {
+    const athleteId = session.strava.athlete && session.strava.athlete.id;
+    if (!athleteId) {
+      return res.status(400).json({ error: "Missing Strava athlete id in the current session." });
+    }
+
+    const stats = await stravaFetch(`/athletes/${athleteId}/stats`, session);
+    res.json(stats);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/strava/activities", async (req, res) => {
+  const session = getSession(req);
+  if (!session || !session.strava) {
+    return res.status(401).json({ error: "Strava account not connected." });
+  }
+
+  try {
+    const perPage = Math.min(Math.max(parseInt(req.query.per_page, 10) || 12, 1), 30);
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const activities = await stravaFetch("/athlete/activities", session, {
+      per_page: String(perPage),
+      page: String(page),
+    });
+
+    res.json((activities || []).map((activity) => ({
+      id: activity.id,
+      name: activity.name,
+      type: activity.type,
+      sportType: activity.sport_type || activity.sportType || activity.type,
+      startDate: activity.start_date,
+      startDateLocal: activity.start_date_local,
+      timezone: activity.timezone,
+      distanceMeters: activity.distance || 0,
+      distanceKm: Number(((activity.distance || 0) / 1000).toFixed(2)),
+      movingTime: activity.moving_time || 0,
+      elapsedTime: activity.elapsed_time || 0,
+      elevationGain: activity.total_elevation_gain || 0,
+      kudosCount: activity.kudos_count || 0,
+      achievementCount: activity.achievement_count || 0,
+      averageSpeedKph: activity.average_speed ? Number((activity.average_speed * 3.6).toFixed(2)) : null,
+      maxSpeedKph: activity.max_speed ? Number((activity.max_speed * 3.6).toFixed(2)) : null,
+      private: !!activity.private,
+      visibility: activity.visibility || null,
+      url: activity.id ? `https://www.strava.com/activities/${activity.id}` : null,
+    })));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Recent accepted submissions (PUBLIC — no auth needed, just username)
 // Enriched with difficulty by querying each problem in parallel
 app.get("/api/leetcode/recent/:username", async (req, res) => {
@@ -615,5 +919,8 @@ app.listen(PORT, () => {
   console.log(`Server running at http://localhost:${PORT}`);
   if (!process.env.GITHUB_CLIENT_ID) {
     console.log("⚠  No GITHUB_CLIENT_ID — go to http://localhost:" + PORT + "/admin to configure");
+  }
+  if (!process.env.STRAVA_CLIENT_ID) {
+    console.log("⚠  No STRAVA_CLIENT_ID — go to http://localhost:" + PORT + "/admin to configure Strava");
   }
 });
