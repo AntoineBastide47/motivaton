@@ -28,20 +28,29 @@ export interface VerificationResult {
 
 export interface SignProofRequest {
   challengeIdx: number;
-  checkpointIndex: number;
   beneficiaryAddress: string;
   duolingoUsername?: string;
 }
 
 export interface SignProofResponse {
   verified: boolean;
-  signature: string;
+  earnedCount: number;
+  alreadyClaimed: number;
+  newCheckpoints: { checkpointIndex: number; signature: string }[];
   challengeIdx: number;
-  checkpointIndex: number;
   beneficiaryAddress: string;
 }
 
-/** Backend API — verification and signing only */
+export interface AuthConnection {
+  connected: boolean;
+  username?: string;
+}
+
+export interface AuthStatus {
+  github: AuthConnection;
+}
+
+/** Backend API — verification, signing, and auth */
 export const backendApi = {
   check(data: VerifyCheckRequest) {
     return request<VerificationResult>("/verify/check", {
@@ -59,5 +68,24 @@ export const backendApi = {
 
   getPublicKey() {
     return request<{ publicKey: string }>("/verify/public-key");
+  },
+
+  getAuthStatus(walletAddress: string) {
+    return request<AuthStatus>(`/auth/status?wallet=${encodeURIComponent(walletAddress)}`);
+  },
+
+  startGitHubOAuth(walletAddress: string, challengeIdx?: number) {
+    const returnPath = challengeIdx != null ? `/challenge/${challengeIdx}` : "/";
+    return request<{ url: string }>("/auth/github/start", {
+      method: "POST",
+      body: JSON.stringify({ walletAddress, returnPath }),
+    });
+  },
+
+  disconnectGitHub(walletAddress: string) {
+    return request<{ ok: boolean }>("/auth/github/disconnect", {
+      method: "POST",
+      body: JSON.stringify({ walletAddress }),
+    });
   },
 };

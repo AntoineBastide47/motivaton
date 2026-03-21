@@ -236,3 +236,40 @@ Key files:
 Follow-up gaps:
 - Chess.com is still only documented in `apis.md` and is not yet exposed in the same dashboard UI.
 - The Strava flow currently focuses on recent activities and totals; webhook handling and challenge-specific verification logic are still future work.
+
+### 2026-03-21 - Public Browse Section Restored In Home Screen
+
+Summary:
+- Added a separate `Browse challenges` section to the home screen.
+- The home screen now derives three useful counts from the fetched challenge set: total fetched, user-specific, and public browseable challenges.
+- The browse section excludes unlisted challenges and excludes challenges already shown in `Your challenges`.
+
+Why it matters now:
+- The miniapp once again has a public discovery surface while preserving the private participant-focused list for the connected wallet.
+- Users can browse public challenges without mixing them into the personal list.
+
+Key files:
+- `apps/miniapp/src/pages/Home.tsx`
+
+Follow-up gaps:
+- The browse section still depends entirely on the contract getter data and therefore inherits any chain/RPC visibility delays.
+
+### 2026-03-21 - Beneficiary App Connection And Verification Prompts
+
+Summary:
+- Refined the challenge detail screen so beneficiary-only prompts now follow explicit per-app states instead of ad hoc conditional blocks.
+- OAuth-style apps such as `GitHub` now show a connect CTA while active and unlinked, a passive connected confirmation once linked, and an ended-without-connection warning instead of a connect button after expiry.
+- Manual-input apps such as `Duolingo` now show their verification input in the ended-challenge state above the checkpoint board.
+
+Why it matters now:
+- The challenge detail page now matches the intended verification UX more closely and avoids showing connect or verification prompts to sponsors or spectators.
+- Future OAuth integrations have a clearer frontend extension point through app-key-based auth status lookup and connect handling.
+
+Key files:
+- `apps/miniapp/src/pages/ChallengeDetail.tsx`
+- `apps/miniapp/src/api.ts`
+- `apps/miniapp/src/index.css`
+
+Follow-up gaps:
+- Additional OAuth apps will still need matching backend auth routes and a new case in `handleConnectApp`.
+- The beneficiary claim flow still inherits the broader verification-model correctness risks already called out in prior review comments.

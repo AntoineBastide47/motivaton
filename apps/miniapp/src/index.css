@@ -229,6 +229,48 @@ a {
   gap: 0.55rem;
 }
 
+.section-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.6rem;
+  height: 2.6rem;
+  flex-shrink: 0;
+  border: 1px solid rgba(108, 124, 170, 0.16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.64);
+  color: var(--page-accent-strong);
+  cursor: pointer;
+  transition:
+    transform 180ms var(--ease-out),
+    border-color 180ms var(--ease-out),
+    background-color 180ms var(--ease-out);
+}
+
+.icon-button svg {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.icon-button:hover {
+  transform: translateY(-1px);
+  border-color: rgba(50, 105, 216, 0.32);
+  background: rgba(49, 103, 216, 0.09);
+}
+
+.icon-button:disabled {
+  opacity: 0.52;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .section-note {
   font-size: 0.9rem;
 }
@@ -726,6 +768,19 @@ a {
 .action-panel {
   display: grid;
   gap: 0.9rem;
+}
+
+.app-status-panel {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.app-status-copy strong {
+  color: var(--page-ink);
+}
+
+.app-status-warning {
+  color: color-mix(in oklab, var(--page-warning) 74%, black);
 }
 
 .info-chip-row {
