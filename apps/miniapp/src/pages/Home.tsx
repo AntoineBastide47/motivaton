@@ -80,21 +80,29 @@ export function Home() {
   const [challenges, setChallenges] = useState<IndexedChallenge[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const hasContractAddress = Boolean(import.meta.env.VITE_CONTRACT_ADDRESS);
 
   const normalizedUserAddress = userAddress ? normalizeAddress(userAddress) : "";
 
-  useEffect(() => {
+  async function refreshChallenges() {
     if (!hasContractAddress) return;
     setLoading(true);
     setError("");
-    getAllChallenges()
-      .then(setChallenges)
-      .catch((e) => {
-        console.error("Failed to load challenges:", e);
-        setError(e.message);
-      })
-      .finally(() => setLoading(false));
+    try {
+      const nextChallenges = await getAllChallenges();
+      setChallenges(nextChallenges);
+      setLastUpdatedAt(new Date());
+    } catch (e: any) {
+      console.error("Failed to load challenges:", e);
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void refreshChallenges();
   }, [hasContractAddress]);
 
   const myChallenges = userAddress
@@ -104,14 +112,17 @@ export function Home() {
         return sponsor === normalizedUserAddress || beneficiary === normalizedUserAddress;
       })
     : [];
+  const myChallengeIds = new Set(myChallenges.map((challenge) => challenge.index));
+  const browseChallenges = challenges.filter((challenge) => !challenge.unlisted && !myChallengeIds.has(challenge.index));
 
   useEffect(() => {
     console.log("[Home] challenge counts", {
       totalChallenges: challenges.length,
       userChallenges: myChallenges.length,
+      browseChallenges: browseChallenges.length,
       userAddress,
     });
-  }, [challenges.length, myChallenges.length, userAddress]);
+  }, [browseChallenges.length, challenges.length, myChallenges.length, userAddress]);
 
   return (
     <div className="page">
@@ -163,6 +174,25 @@ export function Home() {
               Only challenges where the connected wallet is the sponsor or beneficiary are shown here.
             </p>
           </div>
+          <button
+            type="button"
+            className="icon-button"
+            onClick={() => void refreshChallenges()}
+            disabled={loading}
+            aria-label="Refresh your challenges"
+            title="Refresh your challenges"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M20 12a8 8 0 1 1-2.34-5.66M20 4v6h-6"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
         </div>
         {!userAddress && (
           <div className="empty-state">
@@ -180,6 +210,55 @@ export function Home() {
         {userAddress && (
           <div className="list-stack">
             {myChallenges.map((c) => (
+              <ChallengeCard key={c.index} challenge={c} />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="detail-stack">
+        <div className="section-header">
+          <div>
+            <div className="title-with-pill">
+              <h2 className="section-title">Browse challenges</h2>
+              <span className="inline-note" title={`${browseChallenges.length} public challenges`} aria-label={`${browseChallenges.length} public challenges`}>
+                {browseChallenges.length}
+              </span>
+            </div>
+            <p className="section-note">
+              Public challenges from other users. Unlisted challenges stay out of this section.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="icon-button"
+            onClick={() => void refreshChallenges()}
+            disabled={loading}
+            aria-label="Refresh browse challenges"
+            title="Refresh browse challenges"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M20 12a8 8 0 1 1-2.34-5.66M20 4v6h-6"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          </button>
+        </div>
+        {loading && <div className="loading-card">Loading browse challenges...</div>}
+        {!loading && browseChallenges.length === 0 && (
+          <div className="empty-state">
+            <strong>No public challenges yet</strong>
+            <p>When users create public challenges, they will appear here.</p>
+          </div>
+        )}
+        {!loading && browseChallenges.length > 0 && (
+          <div className="list-stack">
+            {browseChallenges.map((c) => (
               <ChallengeCard key={c.index} challenge={c} />
             ))}
           </div>

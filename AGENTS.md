@@ -213,3 +213,20 @@ Key files:
 
 Follow-up gaps:
 - This still depends on polling the chain getter and therefore inherits the same timeout behavior as the indexing wait flow.
+
+### 2026-03-21 - Public Browse Section Restored In Home Screen
+
+Summary:
+- Added a separate `Browse challenges` section to the home screen.
+- The home screen now derives three useful counts from the fetched challenge set: total fetched, user-specific, and public browseable challenges.
+- The browse section excludes unlisted challenges and excludes challenges already shown in `Your challenges`.
+
+Why it matters now:
+- The miniapp once again has a public discovery surface while preserving the private participant-focused list for the connected wallet.
+- Users can browse public challenges without mixing them into the personal list.
+
+Key files:
+- `apps/miniapp/src/pages/Home.tsx`
+
+Follow-up gaps:
+- The browse section still depends entirely on the contract getter data and therefore inherits any chain/RPC visibility delays.

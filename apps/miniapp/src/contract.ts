@@ -127,6 +127,11 @@ async function rpcCall(method: string, params: Record<string, any>): Promise<any
   return json.result;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function rpcParallel(calls: { method: string; params: Record<string, any> }[]): Promise<any[]> {
+  return Promise.all(calls.map((c) => rpcCall(c.method, c.params)));
+}
+
 function parseAddress(base64Boc: string): string {
   const cell = Cell.fromBase64(base64Boc);
   return cell.beginParse().loadAddress().toString();
@@ -181,10 +186,19 @@ export async function getChallenge(idx: number): Promise<OnChainChallenge | null
 
 export async function getAllChallenges(): Promise<(OnChainChallenge & { index: number })[]> {
   const count = await getChallengeCount();
+  if (count === 0) return [];
+  const calls = Array.from({ length: count }, (_, i) => ({
+    method: "runGetMethod",
+    params: { address: CONTRACT_ADDRESS, method: "challenge", stack: [["num", String(i)]] },
+  }));
+  const results = await rpcParallel(calls);
   const challenges: (OnChainChallenge & { index: number })[] = [];
-  for (let i = 0; i < count; i++) {
-    const c = await getChallenge(i);
-    if (c) challenges.push({ ...c, index: i });
+  for (let i = 0; i < results.length; i++) {
+    const entry = results[i].stack[0];
+    if (getStackItemType(entry) !== "tuple") continue;
+    const elements = getTupleElements(entry);
+    if (!elements) continue;
+    challenges.push({ ...parseChallengeFromElements(elements), index: i });
   }
   return challenges;
 }
