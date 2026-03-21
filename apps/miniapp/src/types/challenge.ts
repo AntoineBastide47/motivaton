@@ -70,3 +70,18 @@ export interface Challenge extends ChallengeFormData {
 export function buildChallengeId(app: App, action: AppAction, count: number): string {
   return `${app}:${action}:${count}`;
 }
+
+export function parseChallengeId(challengeId: string) {
+  const [app = "", action = "", rawCount = "0"] = challengeId.split(":");
+  const count = Number.parseInt(rawCount, 10) || 0;
+  return { app, action, count };
+}
+
+export function formatActionLabel(action: string): string {
+  return action
+    .toLowerCase()
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part[0]?.toUpperCase() + part.slice(1))
+    .join(" ");
+}

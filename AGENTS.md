@@ -82,3 +82,24 @@ Key files:
 
 Follow-up gaps:
 - Future substantial implementation work should extend this section history instead of replacing it.
+
+### 2026-03-21 - Miniapp UI Refinement Pass
+
+Summary:
+- Refined the visual system of the Telegram miniapp in `apps/miniapp` with a stronger typography, color, spacing, and surface hierarchy.
+- Reworked the `Home`, `CreateChallenge`, and `ChallengeDetail` screens to feel more structured and legible while keeping the same core flows.
+- Added shared challenge-display helpers for cleaner labels and more consistent presentation.
+
+Why it matters now:
+- New contributors can treat the miniapp as having an intentional UI baseline rather than a raw scaffold.
+- Future work on verification, contract integration, and product polish can build on clearer screen structure instead of redoing the entire presentation layer.
+
+Key files:
+- `apps/miniapp/src/index.css`
+- `apps/miniapp/src/pages/Home.tsx`
+- `apps/miniapp/src/pages/CreateChallenge.tsx`
+- `apps/miniapp/src/pages/ChallengeDetail.tsx`
+- `apps/miniapp/src/types/challenge.ts`
+
+Follow-up gaps:
+- The UI is improved, but some review-reported contract and verification correctness issues still need implementation fixes outside this design pass.

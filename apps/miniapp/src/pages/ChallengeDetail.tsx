@@ -11,7 +11,7 @@ import {
   type OnChainChallenge,
 } from "../contract";
 import { backendApi, type VerificationResult } from "../api";
-import { APP_LABELS } from "../types/challenge";
+import { APP_LABELS, formatActionLabel, parseChallengeId } from "../types/challenge";
 
 export function ChallengeDetail() {
   const { id } = useParams<{ id: string }>();
@@ -147,96 +147,171 @@ export function ChallengeDetail() {
     }
   }
 
-  if (loading) return <div className="page">Loading...</div>;
-  if (error && !challenge) return <div className="page" style={{ color: "red" }}>{error}</div>;
-  if (!challenge) return <div className="page">Challenge not found.</div>;
+  if (loading) {
+    return (
+      <div className="page">
+        <div className="loading-card">Loading challenge...</div>
+      </div>
+    );
+  }
 
-  const parts = challenge.challengeId.split(":");
-  const appKey = parts[0] || "";
-  const action = parts[1] || "";
+  if (error && !challenge) {
+    return (
+      <div className="page">
+        <div className="error-banner">
+          <strong>Could not load challenge</strong>
+          <p>{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!challenge) {
+    return (
+      <div className="page">
+        <div className="empty-state">
+          <strong>Challenge not found</strong>
+          <p>The contract did not return a challenge for this index.</p>
+        </div>
+      </div>
+    );
+  }
+
+  const { app: appKey, action } = parseChallengeId(challenge.challengeId);
   const appLabel = APP_LABELS[appKey as keyof typeof APP_LABELS] ?? appKey;
+  const actionLabel = formatActionLabel(action);
   const expired = Date.now() / 1000 > challenge.endDate;
   const isBeneficiary = userAddress === challenge.beneficiary;
   const isSponsor = userAddress === challenge.sponsor;
   const progressPct = Math.min(100, Math.round((challenge.claimedCount / challenge.totalCheckpoints) * 100));
+  const status = !challenge.active
+    ? challenge.claimedCount >= challenge.totalCheckpoints
+      ? "completed"
+      : "closed"
+    : expired
+      ? "expired"
+      : "active";
+  const nextCheckpoint = claimedMap.findIndex((claimed) => !claimed);
 
   return (
     <div className="page">
-      <h1 className="page-title">Challenge</h1>
+      <button type="button" className="top-link" onClick={() => navigate("/")}>
+        Back to challenges
+      </button>
 
-      <div className="challenge-summary">
-        <div className="summary-row">
-          <span className="summary-label">ID</span>
-          <span>{challenge.challengeId}</span>
-        </div>
-        <div className="summary-row">
-          <span className="summary-label">App</span>
-          <span>{appLabel}</span>
-        </div>
-        <div className="summary-row">
-          <span className="summary-label">Action</span>
-          <span>{action}</span>
-        </div>
-        <div className="summary-row">
-          <span className="summary-label">Checkpoints</span>
-          <span>{challenge.claimedCount} / {challenge.totalCheckpoints} claimed</span>
-        </div>
-        <div className="summary-row">
-          <span className="summary-label">Total Deposit</span>
-          <span>{(Number(challenge.totalDeposit) / 1e9).toFixed(2)} TON</span>
-        </div>
-        <div className="summary-row">
-          <span className="summary-label">Per Checkpoint</span>
-          <span>{(Number(challenge.amountPerCheckpoint) / 1e9).toFixed(4)} TON</span>
-        </div>
-        <div className="summary-row">
-          <span className="summary-label">Status</span>
-          <span>{!challenge.active ? "Closed" : expired ? "Expired" : "Active"}</span>
-        </div>
-        <div className="summary-row">
-          <span className="summary-label">Deadline</span>
-          <span>{new Date(challenge.endDate * 1000).toLocaleString()}</span>
-        </div>
-        <div className="summary-row">
-          <span className="summary-label">Sponsor</span>
-          <span>{challenge.sponsor.slice(0, 6)}...{challenge.sponsor.slice(-4)}</span>
-        </div>
-        <div className="summary-row">
-          <span className="summary-label">Beneficiary</span>
-          <span>{challenge.beneficiary.slice(0, 6)}...{challenge.beneficiary.slice(-4)}</span>
-        </div>
-      </div>
-
-      {/* Progress bar */}
-      <div style={{ margin: "16px 0", background: "#e0e0e0", borderRadius: 8, height: 12, overflow: "hidden" }}>
-        <div style={{ width: `${progressPct}%`, background: !challenge.active && challenge.claimedCount >= challenge.totalCheckpoints ? "#4caf50" : "var(--tg-theme-button-color)", height: "100%", borderRadius: 8, transition: "width 0.3s" }} />
-      </div>
-
-      {/* Checkpoint grid */}
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginBottom: 16 }}>
-        {claimedMap.map((claimed, i) => (
-          <div
-            key={i}
-            style={{
-              width: 28,
-              height: 28,
-              borderRadius: 6,
-              background: claimed ? "#4caf50" : "#e0e0e0",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 12,
-              color: claimed ? "#fff" : "var(--tg-theme-hint-color)",
-            }}
-          >
-            {i + 1}
+      <header className="surface surface-accent hero-panel detail-header">
+        <div className="eyebrow">On-chain challenge</div>
+        <div className="detail-title-row">
+          <div>
+            <h1 className="detail-title">{appLabel} / {actionLabel}</h1>
+            <p className="detail-subcopy">
+              Escrow #{idx} releases funds one checkpoint at a time. Claims require backend verification and a contract-valid proof.
+            </p>
           </div>
-        ))}
-      </div>
+          <span className={`status-pill status-${status}`}>{status}</span>
+        </div>
+        <div className="info-chip-row">
+          <span className="inline-note">{challenge.challengeId}</span>
+          <span className="inline-note">Deadline {new Date(challenge.endDate * 1000).toLocaleDateString()}</span>
+        </div>
+      </header>
 
-      {/* Duolingo username input for verification */}
+      <section className="stats-grid">
+        <div className="stat-tile surface">
+          <span className="stat-label">Progress</span>
+          <div className="stat-value">{challenge.claimedCount} / {challenge.totalCheckpoints}</div>
+          <p className="section-note">{progressPct}% of checkpoints unlocked</p>
+        </div>
+        <div className="stat-tile surface">
+          <span className="stat-label">Escrow pool</span>
+          <div className="stat-value">{(Number(challenge.totalDeposit) / 1e9).toFixed(2)} TON</div>
+          <p className="section-note">Total value currently held by the contract.</p>
+        </div>
+        <div className="stat-tile surface">
+          <span className="stat-label">Per checkpoint</span>
+          <div className="stat-value">{(Number(challenge.amountPerCheckpoint) / 1e9).toFixed(4)} TON</div>
+          <p className="section-note">
+            {nextCheckpoint === -1 ? "All checkpoints already claimed." : `Next unlock is checkpoint ${nextCheckpoint + 1}.`}
+          </p>
+        </div>
+        <div className="stat-tile surface">
+          <span className="stat-label">Closing time</span>
+          <div className="stat-value">{new Date(challenge.endDate * 1000).toLocaleDateString()}</div>
+          <p className="section-note">{expired ? "Past deadline. Refund path may be available." : "Claims remain open until the deadline."}</p>
+        </div>
+      </section>
+
+      <section className="surface section-panel">
+        <div className="section-header">
+          <div>
+            <h2 className="section-title">Checkpoint board</h2>
+            <p className="section-note">Each green tile is already unlocked and claimed.</p>
+          </div>
+          <span className="inline-note">{progressPct}% complete</span>
+        </div>
+        <div className="progress-track">
+          <div className="progress-fill" style={{ width: `${progressPct}%` }} />
+        </div>
+        <div className="checkpoint-grid">
+          {claimedMap.map((claimed, i) => (
+            <div key={i} className={`checkpoint-pill ${claimed ? "is-claimed" : ""}`}>
+              {i + 1}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="identity-grid">
+        <div className="surface section-panel">
+          <h2 className="section-title" style={{ marginBottom: "0.9rem" }}>Participants</h2>
+          <div className="detail-stack">
+            <div className="identity-row">
+              <div>
+                <div className="identity-role">Sponsor</div>
+                <div className="identity-address">{challenge.sponsor.slice(0, 6)}...{challenge.sponsor.slice(-4)}</div>
+              </div>
+              {isSponsor && <span className="inline-note">You</span>}
+            </div>
+            <div className="identity-row">
+              <div>
+                <div className="identity-role">Beneficiary</div>
+                <div className="identity-address">{challenge.beneficiary.slice(0, 6)}...{challenge.beneficiary.slice(-4)}</div>
+              </div>
+              {isBeneficiary && <span className="inline-note">You</span>}
+            </div>
+          </div>
+        </div>
+        <div className="surface section-panel">
+          <h2 className="section-title" style={{ marginBottom: "0.9rem" }}>Action context</h2>
+          <div className="summary-list">
+            <div className="summary-row">
+              <span className="summary-label">App</span>
+              <span className="summary-value">{appLabel}</span>
+            </div>
+            <div className="summary-row">
+              <span className="summary-label">Action</span>
+              <span className="summary-value">{actionLabel}</span>
+            </div>
+            <div className="summary-row">
+              <span className="summary-label">Claim status</span>
+              <span className="summary-value">{challenge.active ? "Open" : "Closed"}</span>
+            </div>
+            <div className="summary-row">
+              <span className="summary-label">Wallet state</span>
+              <span className="summary-value">{userAddress ? "Connected" : "Connect a wallet to act"}</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {appKey === "DUOLINGO" && challenge.active && !expired && isBeneficiary && (
-        <div className="form-group">
+        <section className="surface section-panel action-panel">
+          <div className="section-header">
+            <div>
+              <h2 className="section-title">Verification input</h2>
+              <p className="section-note">Required for the current Duolingo verification flow.</p>
+            </div>
+          </div>
           <label className="form-label">Duolingo Username (for verification)</label>
           <input
             className="form-input"
@@ -244,55 +319,74 @@ export function ChallengeDetail() {
             value={duolingoInput}
             onChange={(e) => setDuolingoInput(e.target.value)}
           />
-        </div>
+        </section>
       )}
 
-      {/* Beneficiary actions */}
       {challenge.active && !expired && isBeneficiary && (
-        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-          <button className="submit-btn" onClick={handleVerify} disabled={verifying} style={{ flex: 1 }}>
-            {verifying ? "Checking..." : "Verify Progress"}
-          </button>
-          <button className="submit-btn" onClick={handleClaim} disabled={claiming} style={{ flex: 1, background: "#4caf50" }}>
-            {claiming ? "Claiming..." : "Claim Checkpoint"}
-          </button>
-        </div>
+        <section className="surface surface-accent section-panel action-panel">
+          <div className="section-header">
+            <div>
+              <h2 className="section-title">Beneficiary actions</h2>
+              <p className="section-note">Check progress first if you want feedback, then submit the next claim through the wallet.</p>
+            </div>
+          </div>
+          <div className="button-row">
+            <button className="button-secondary" onClick={handleVerify} disabled={verifying}>
+              {verifying ? "Checking..." : "Verify progress"}
+            </button>
+            <button className="button-primary" onClick={handleClaim} disabled={claiming}>
+              {claiming ? "Claiming..." : "Claim next checkpoint"}
+            </button>
+          </div>
+        </section>
       )}
 
-      {/* Sponsor refund */}
       {expired && challenge.active && isSponsor && challenge.claimedCount < challenge.totalCheckpoints && (
-        <button className="submit-btn" onClick={handleRefund} disabled={refunding} style={{ background: "#ff9800" }}>
-          {refunding ? "Refunding..." : "Refund Unclaimed"}
-        </button>
+        <section className="surface section-panel action-panel">
+          <div className="section-header">
+            <div>
+              <h2 className="section-title">Sponsor refund</h2>
+              <p className="section-note">After the deadline, any remaining value can be returned to the sponsor.</p>
+            </div>
+          </div>
+          <button className="button-ghost button-full" onClick={handleRefund} disabled={refunding}>
+            {refunding ? "Refunding..." : "Refund unclaimed balance"}
+          </button>
+        </section>
       )}
 
-      {/* Verification result */}
       {verification && (
-        <div className="challenge-summary" style={{ marginTop: 8 }}>
-          <h3>Verification Result</h3>
-          <div className="summary-row">
-            <span className="summary-label">Status</span>
-            <span style={{ color: verification.verified ? "#4caf50" : "#ff9800" }}>
-              {verification.verified ? "VERIFIED" : "NOT YET"}
+        <section className="surface section-panel">
+          <div className="section-header">
+            <div>
+              <h2 className="section-title">Verification result</h2>
+              <p className="section-note">Backend readout for the current verification request.</p>
+            </div>
+            <span className={`verification-badge ${verification.verified ? "is-verified" : "is-pending"}`}>
+              {verification.verified ? "Verified" : "Not yet"}
             </span>
           </div>
-          <div className="summary-row">
-            <span className="summary-label">Progress</span>
-            <span>{verification.currentCount} / {verification.targetCount}</span>
+          <div className="summary-list">
+            <div className="summary-row">
+              <span className="summary-label">Progress</span>
+              <span className="summary-value">{verification.currentCount} / {verification.targetCount}</span>
+            </div>
+            <div className="summary-row">
+              <span className="summary-label">Details</span>
+              <span className="summary-value">{verification.message}</span>
+            </div>
           </div>
-          <div className="summary-row">
-            <span className="summary-label">Details</span>
-            <span>{verification.message}</span>
-          </div>
+        </section>
+      )}
+
+      {error && (
+        <div className="error-banner">
+          <strong>Action failed</strong>
+          <p>{error}</p>
         </div>
       )}
 
-      {error && <p style={{ color: "#f44336", marginTop: 8 }}>{error}</p>}
-
-      <button
-        onClick={() => navigate("/")}
-        style={{ marginTop: 12, width: "100%", padding: 14, border: "1px solid #ddd", borderRadius: 10, fontSize: 16, background: "transparent", color: "var(--tg-theme-text-color)", cursor: "pointer" }}
-      >
+      <button type="button" className="button-secondary button-full" onClick={() => navigate("/")}>
         Back
       </button>
     </div>

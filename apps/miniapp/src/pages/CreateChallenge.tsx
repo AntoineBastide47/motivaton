@@ -7,6 +7,7 @@ import {
   APP_LABELS,
   type AppAction,
   buildChallengeId,
+  formatActionLabel,
 } from "../types/challenge";
 import { buildCreateChallengeBody, CONTRACT_ADDRESS, toNano } from "../contract";
 
@@ -32,6 +33,8 @@ export function CreateChallenge() {
   }
 
   const challengeId = useMemo(() => buildChallengeId(app, action, count), [app, action, count]);
+  const amountNumber = Number.parseFloat(amount);
+  const rewardPerCheckpoint = Number.isFinite(amountNumber) && count > 0 ? amountNumber / count : 0;
 
   const minDate = new Date(Date.now() + 86400000).toISOString().split("T")[0];
 
@@ -87,163 +90,200 @@ export function CreateChallenge() {
 
   return (
     <div className="page">
-      <h1 className="page-title">Create Challenge</h1>
+      <button type="button" className="top-link" onClick={() => navigate("/")}>
+        Back to challenges
+      </button>
 
-      <form onSubmit={handleSubmit}>
-        <div className="form-group">
-          <label className="form-label">App</label>
-          <select
-            className="form-select"
-            value={app}
-            onChange={(e) => handleAppChange(e.target.value as App)}
-          >
-            {Object.values(App).map((a) => (
-              <option key={a} value={a}>
-                {APP_LABELS[a]}
-              </option>
-            ))}
-          </select>
-        </div>
+      <header className="surface surface-accent hero-panel">
+        <div className="eyebrow">New escrow</div>
+        <h1 className="page-title">Define the rule. Lock the stake.</h1>
+        <p className="page-intro">
+          Set the accountability rule, who benefits, and when the escrow closes. The contract holds the deposit until verified checkpoints are claimed.
+        </p>
+      </header>
 
-        <div className="form-group">
-          <label className="form-label">Action</label>
-          <select
-            className="form-select"
-            value={action}
-            onChange={(e) => setAction(e.target.value as AppAction)}
-          >
-            {actions.map((a) => (
-              <option key={a.value} value={a.value}>
-                {a.label}
-              </option>
-            ))}
-          </select>
-        </div>
+      <form onSubmit={handleSubmit} className="form-stack">
+        <section className="surface section-panel">
+          <div className="section-header">
+            <div>
+              <h2 className="section-title">Challenge rule</h2>
+              <p className="section-note">Choose the app, the tracked action, and how many checkpoints must be unlocked.</p>
+            </div>
+            <span className="inline-note">{challengeId}</span>
+          </div>
+          <div className="section-divider" />
+          <div className="split-grid">
+            <div className="form-group">
+              <label className="form-label">App</label>
+              <select
+                className="form-select"
+                value={app}
+                onChange={(e) => handleAppChange(e.target.value as App)}
+              >
+                {Object.values(App).map((a) => (
+                  <option key={a} value={a}>
+                    {APP_LABELS[a]}
+                  </option>
+                ))}
+              </select>
+            </div>
 
-        <div className="form-group">
-          <label className="form-label">Times to Complete</label>
-          <input
-            className="form-input"
-            type="number"
-            min={1}
-            value={count}
-            onChange={(e) => setCount(Math.max(1, parseInt(e.target.value) || 1))}
-          />
-        </div>
+            <div className="form-group">
+              <label className="form-label">Action</label>
+              <select
+                className="form-select"
+                value={action}
+                onChange={(e) => setAction(e.target.value as AppAction)}
+              >
+                {actions.map((a) => (
+                  <option key={a.value} value={a.value}>
+                    {a.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
 
-        <div className="form-group">
-          <label className="form-label">Amount (TON)</label>
-          <input
-            className="form-input"
-            type="number"
-            step="0.01"
-            min="0.06"
-            placeholder="1.00"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            required
-          />
-          <span style={{ fontSize: 12, color: "var(--tg-theme-hint-color)" }}>
-            0.05 TON reserved for gas; rest is escrowed
-          </span>
-        </div>
+          <div className="form-group" style={{ marginTop: "0.9rem" }}>
+            <label className="form-label">Times to complete</label>
+            <input
+              className="form-input"
+              type="number"
+              min={1}
+              value={count}
+              onChange={(e) => setCount(Math.max(1, parseInt(e.target.value) || 1))}
+            />
+            <p className="field-hint">Each successful claim unlocks one checkpoint from the escrow.</p>
+          </div>
+        </section>
 
-        <div className="form-group">
-          <label className="form-label">Who Gets Paid (TON address, leave empty for self)</label>
-          <input
-            className="form-input"
-            type="text"
-            placeholder={userAddress || "Connect wallet first"}
-            value={whoIsPaid}
-            onChange={(e) => setWhoIsPaid(e.target.value)}
-          />
-        </div>
+        <section className="surface section-panel">
+          <div className="section-header">
+            <div>
+              <h2 className="section-title">Stake and participants</h2>
+              <p className="section-note">The connected wallet funds the challenge. The beneficiary receives unlocked rewards.</p>
+            </div>
+          </div>
+          <div className="section-divider" />
+          <div className="split-grid">
+            <div className="form-group">
+              <label className="form-label">Amount (TON)</label>
+              <input
+                className="form-input"
+                type="number"
+                step="0.01"
+                min="0.06"
+                placeholder="1.00"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                required
+              />
+              <p className="field-hint">Reserve at least 0.05 TON for gas. The rest is escrowed.</p>
+            </div>
 
-        <div className="form-group">
-          <label className="form-label">Deadline Date</label>
-          <input
-            className="form-input"
-            type="date"
-            min={minDate}
-            value={endDate}
-            onChange={(e) => setEndDate(e.target.value)}
-            required
-          />
-        </div>
+            <div className="form-group">
+              <label className="form-label">Deadline date</label>
+              <input
+                className="form-input"
+                type="date"
+                min={minDate}
+                value={endDate}
+                onChange={(e) => setEndDate(e.target.value)}
+                required
+              />
+            </div>
+          </div>
 
-
-        {app === App.Duolingo && (
-          <div className="form-group">
-            <label className="form-label">Duolingo Username</label>
+          <div className="form-group" style={{ marginTop: "0.9rem" }}>
+            <label className="form-label">Who gets paid</label>
             <input
               className="form-input"
               type="text"
-              placeholder="Your Duolingo username"
-              value={duolingoUsername}
-              onChange={(e) => setDuolingoUsername(e.target.value)}
+              placeholder={userAddress || "Connect wallet first"}
+              value={whoIsPaid}
+              onChange={(e) => setWhoIsPaid(e.target.value)}
             />
+            <p className="field-hint">Leave empty to pay yourself. Otherwise enter the beneficiary TON address.</p>
           </div>
-        )}
 
-        {amount && endDate && (
-          <div className="challenge-summary">
-            <h3>Challenge Summary</h3>
-            <div className="summary-row">
-              <span className="summary-label">Challenge ID</span>
-              <span>{challengeId}</span>
+          {app === App.Duolingo && (
+            <div className="form-group" style={{ marginTop: "0.9rem" }}>
+              <label className="form-label">Duolingo username</label>
+              <input
+                className="form-input"
+                type="text"
+                placeholder="Your Duolingo username"
+                value={duolingoUsername}
+                onChange={(e) => setDuolingoUsername(e.target.value)}
+              />
+              <p className="field-hint">Used by the verifier flow. The backend and contract rules still need to bind this value safely.</p>
             </div>
+          )}
+        </section>
+
+        <aside className="surface surface-accent summary-panel">
+          <div className="section-header">
+            <div>
+              <h2 className="section-title">Challenge summary</h2>
+              <p className="section-note">A quick read before you ask the wallet to sign.</p>
+            </div>
+            <span className="inline-note">{APP_LABELS[app]}</span>
+          </div>
+          <div className="summary-list">
             <div className="summary-row">
               <span className="summary-label">Goal</span>
-              <span>
-                {count}x {actionLabel} on {APP_LABELS[app]}
+              <span className="summary-value">
+                {count} x {actionLabel} on {APP_LABELS[app]}
               </span>
             </div>
             <div className="summary-row">
-              <span className="summary-label">Stake</span>
-              <span>{amount} TON</span>
+              <span className="summary-label">Challenge ID</span>
+              <span className="summary-value">{challengeId}</span>
+            </div>
+            <div className="summary-row">
+              <span className="summary-label">Total stake</span>
+              <span className="summary-value">{amount || "--"} TON</span>
+            </div>
+            <div className="summary-row">
+              <span className="summary-label">Per checkpoint</span>
+              <span className="summary-value">
+                {rewardPerCheckpoint > 0 ? `${rewardPerCheckpoint.toFixed(3)} TON` : "--"}
+              </span>
             </div>
             <div className="summary-row">
               <span className="summary-label">Deadline</span>
-              <span>{new Date(endDate).toLocaleDateString()}</span>
+              <span className="summary-value">
+                {endDate ? new Date(endDate).toLocaleDateString() : "--"}
+              </span>
             </div>
             <div className="summary-row">
-              <span className="summary-label">Payer</span>
-              <span>{userAddress ? `${userAddress.slice(0, 6)}...${userAddress.slice(-4)}` : "Not connected"}</span>
+              <span className="summary-label">Sponsor</span>
+              <span className="summary-value">
+                {userAddress ? `${userAddress.slice(0, 6)}...${userAddress.slice(-4)}` : "Not connected"}
+              </span>
             </div>
             <div className="summary-row">
               <span className="summary-label">Beneficiary</span>
-              <span>
+              <span className="summary-value">
                 {whoIsPaid
                   ? `${whoIsPaid.slice(0, 6)}...${whoIsPaid.slice(-4)}`
                   : userAddress
-                    ? `${userAddress.slice(0, 6)}...${userAddress.slice(-4)} (self)`
+                    ? `${userAddress.slice(0, 6)}...${userAddress.slice(-4)}`
                     : "Not connected"}
               </span>
             </div>
           </div>
-        )}
+        </aside>
 
-        <button type="submit" className="submit-btn" disabled={submitting}>
-          {!userAddress ? "Connect Wallet" : submitting ? "Creating..." : "Create Challenge"}
-        </button>
+        <div className="button-row">
+          <button type="button" className="button-secondary" onClick={() => navigate("/")}>
+            Back
+          </button>
+          <button type="submit" className="button-primary" disabled={submitting}>
+            {!userAddress ? "Connect wallet" : submitting ? "Creating..." : "Create challenge"}
+          </button>
+        </div>
       </form>
-
-      <button
-        onClick={() => navigate("/")}
-        style={{
-          marginTop: 12,
-          width: "100%",
-          padding: 14,
-          border: "1px solid #ddd",
-          borderRadius: 10,
-          fontSize: 16,
-          background: "transparent",
-          color: "var(--tg-theme-text-color)",
-          cursor: "pointer",
-        }}
-      >
-        Back
-      </button>
     </div>
   );
 }

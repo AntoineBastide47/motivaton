@@ -7,7 +7,7 @@ import { ChallengeDetail } from "./pages/ChallengeDetail";
 import { Home } from "./pages/Home";
 import "./index.css";
 
-const MANIFEST_URL = "https://hedikharouf0.github.io/motivaton/tonconnect-manifest.json";
+const MANIFEST_URL = `${window.location.origin}${import.meta.env.BASE_URL}tonconnect-manifest.json`;
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
