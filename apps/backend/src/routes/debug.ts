@@ -49,7 +49,8 @@ debugRouter.get("/cron/trigger", async (_req, res) => {
 debugRouter.post("/claim-log", (req, res) => {
   const { userAddress, contractAddress, challengeIdx, earnedCount, signature, boc } = req.body;
   console.log(`[claim-debug] userAddress: ${userAddress}`);
-  console.log(`[claim-debug] contractAddress: ${contractAddress}`);
+  console.log(`[claim-debug] contractAddress from frontend: "${contractAddress}"`);
+  console.log(`[claim-debug] contractAddress from env: "${process.env.CONTRACT_ADDRESS}"`);
   console.log(`[claim-debug] challengeIdx: ${challengeIdx}, earnedCount: ${earnedCount}`);
   console.log(`[claim-debug] signature: ${signature}`);
   console.log(`[claim-debug] boc: ${boc}`);
