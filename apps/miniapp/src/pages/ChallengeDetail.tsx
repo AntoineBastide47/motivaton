@@ -190,7 +190,7 @@ export function ChallengeDetail() {
       const boc = body.toBoc().toString("base64");
 
       // Log claim debug data to backend
-      fetch(`${import.meta.env.VITE_API_URL || "/api"}/debug/claim-log`, {
+      fetch(`${import.meta.env.VITE_API_URL || "/api"}/claim-log`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
