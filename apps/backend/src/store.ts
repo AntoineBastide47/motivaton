@@ -8,38 +8,54 @@ function getDbPath(): string {
 
 function getDb(): Database.Database {
   const dbPath = getDbPath();
+  console.log(`[store] Opening SQLite at: ${dbPath} (DATABASE_PATH=${process.env.DATABASE_PATH || "(not set)"})`);
   const dir = dirname(dbPath);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
 
-  const db = new Database(dbPath);
-  db.pragma("journal_mode = WAL");
-  db.pragma("foreign_keys = ON");
+  const maxRetries = 5;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const db = new Database(dbPath);
+      db.pragma("journal_mode = WAL");
+      db.pragma("foreign_keys = ON");
 
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS accounts (
-      wallet_address TEXT PRIMARY KEY,
-      github_access_token TEXT,
-      github_username TEXT
-    );
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS accounts (
+          wallet_address TEXT PRIMARY KEY,
+          github_access_token TEXT,
+          github_username TEXT
+        );
 
-    CREATE TABLE IF NOT EXISTS progress (
-      challenge_idx INTEGER PRIMARY KEY,
-      count INTEGER NOT NULL DEFAULT 0
-    );
+        CREATE TABLE IF NOT EXISTS progress (
+          challenge_idx INTEGER PRIMARY KEY,
+          count INTEGER NOT NULL DEFAULT 0
+        );
 
-    CREATE TABLE IF NOT EXISTS processed_events (
-      wallet_address TEXT NOT NULL,
-      event_id TEXT NOT NULL,
-      action TEXT NOT NULL,
-      timestamp INTEGER NOT NULL,
-      PRIMARY KEY (wallet_address, event_id)
-    );
+        CREATE TABLE IF NOT EXISTS processed_events (
+          wallet_address TEXT NOT NULL,
+          event_id TEXT NOT NULL,
+          action TEXT NOT NULL,
+          timestamp INTEGER NOT NULL,
+          PRIMARY KEY (wallet_address, event_id)
+        );
 
-    CREATE INDEX IF NOT EXISTS idx_processed_events_timestamp
-      ON processed_events (timestamp);
-  `);
+        CREATE INDEX IF NOT EXISTS idx_processed_events_timestamp
+          ON processed_events (timestamp);
+      `);
 
-  return db;
+      return db;
+    } catch (err: unknown) {
+      const code = err instanceof Error ? (err as Error & { code?: string }).code : undefined;
+      if (code === "SQLITE_CANTOPEN" && attempt < maxRetries) {
+        console.warn(`[store] SQLITE_CANTOPEN on attempt ${attempt}/${maxRetries}, retrying in ${attempt}s...`);
+        const waitMs = attempt * 1000;
+        Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, waitMs);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error("unreachable");
 }
 
 let _db: Database.Database | null = null;
