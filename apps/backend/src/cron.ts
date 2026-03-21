@@ -1,6 +1,6 @@
 import cron from "node-cron";
 import { getAllChallenges, type OnChainChallenge } from "./chain.js";
-import { getAllAccounts, addProgress, filterAndMarkProcessed, cleanupProcessedEvents } from "./store.js";
+import { getAllAccounts, addProgress, getProgress, filterAndMarkProcessed, cleanupProcessedEvents } from "./store.js";
 import { fetchUserEvents, extractEvents } from "./events.js";
 
 function normalizeAddress(addr: string): string {
@@ -66,20 +66,25 @@ async function eventsProgressJob(lookbackMs: number) {
   const users = collectGitHubUsers(activeChallenges, accounts);
   const since = new Date(Date.now() - lookbackMs);
 
+  console.log(`[cron] ${activeChallenges.length} active challenges, ${users.size} linked users, lookback=${Math.round(lookbackMs / 60_000)}min`);
+
+  for (const c of activeChallenges) {
+    const [app, action, ...rest] = c.challengeId.split(":");
+    console.log(`[cron]   Challenge #${c.index}: app=${app} action=${action} target=${c.target} progress=${getProgress(c.index)} beneficiary=${c.beneficiary}`);
+  }
+
   for (const [normAddr, { wallet, username, token }] of users) {
     try {
       const events = await fetchUserEvents(username, token);
       const eventsByAction = extractEvents(events, since);
 
-      if (eventsByAction["COMMIT"]) {
-        console.log(`[cron] @${username}: found ${eventsByAction["COMMIT"].length} commits: ${eventsByAction["COMMIT"].join(", ")}`);
-      } else {
-        console.log(`[cron] @${username}: no commits found in lookback window`);
-      }
+      const actionSummary = Object.entries(eventsByAction)
+        .map(([action, ids]) => `${action}=${ids.length}`)
+        .join(", ");
+      console.log(`[cron] @${username}: fetched ${events.length} events, matched: ${actionSummary || "none"}`);
 
       for (const [action, ids] of Object.entries(eventsByAction)) {
         const newIds = filterAndMarkProcessed(wallet, ids, action);
-        if (newIds.length === 0) continue;
 
         const matching = activeChallenges.filter((c) => {
           const parts = c.challengeId.split(":");
@@ -87,8 +92,17 @@ async function eventsProgressJob(lookbackMs: number) {
         });
 
         for (const c of matching) {
-          addProgress(c.index, newIds.length);
-          console.log(`[cron] Challenge #${c.index}: +${newIds.length} ${action} by @${username}`);
+          const prevProgress = getProgress(c.index);
+          if (newIds.length > 0) {
+            addProgress(c.index, newIds.length);
+          }
+          const newProgress = getProgress(c.index);
+          console.log(
+            `[cron]   Challenge #${c.index} (${c.challengeId}): ` +
+            `found ${ids.length} ${action}s, ${newIds.length} new → ` +
+            `progress ${prevProgress} -> ${newProgress}/${c.target}` +
+            (newIds.length > 0 ? ` [${newIds.join(", ")}]` : ""),
+          );
         }
       }
     } catch (err) {
