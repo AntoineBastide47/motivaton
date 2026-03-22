@@ -2,8 +2,9 @@ import { beginCell, Address, toNano, internal, SendMode } from "@ton/core";
 import { TonClient, WalletContractV5R1 } from "@ton/ton";
 import { mnemonicToPrivateKey } from "@ton/crypto";
 import { getAllChallenges } from "./chain.js";
-import { getChallengeProgress, isChallengeClaimed, markChallengeClaimed } from "./store.js";
+import { getChallengeProgress, isChallengeClaimed, markChallengeClaimed, clearChallengeClaimed, getTelegramChatIdByBeneficiary } from "./store.js";
 import { signClaimAllProof } from "./signer.js";
+import { sendTelegramMessage, formatClaimNotification } from "./telegram.js";
 
 const OP_CLAIM_ALL = 0xf9dddb36;
 
@@ -41,7 +42,10 @@ function buildClaimAllBody(challengeIdx: number, earnedCount: number, signature:
 
 export async function autoClaimJob() {
   const walletData = await getWallet();
-  if (!walletData) return;
+  if (!walletData) {
+    console.log("[autoclaim] No WALLET_MNEMONIC set, skipping");
+    return;
+  }
 
   const contractAddress = process.env.CONTRACT_ADDRESS;
   if (!contractAddress) {
@@ -60,6 +64,14 @@ export async function autoClaimJob() {
   console.log(`[autoclaim] Checking ${challenges.length} challenges`);
 
   const now = Date.now() / 1000;
+  // Reconcile stale claim entries: if DB says claimed but on-chain says not, clear it
+  for (const c of challenges) {
+    if (isChallengeClaimed(c.index) && c.active && c.claimedCount === 0) {
+      console.log(`[autoclaim] Clearing stale claim for #${c.index} (on-chain claimedCount=0)`);
+      clearChallengeClaimed(c.index);
+    }
+  }
+
   const claimable = challenges.filter((c) => {
     const progress = getChallengeProgress(c.index);
     const claimed = isChallengeClaimed(c.index);
@@ -107,6 +119,8 @@ export async function autoClaimJob() {
 
     if (earnedCount <= c.claimedCount) continue;
 
+    console.log(`[autoclaim] Claiming challenge #${c.index}: earned=${earnedCount} claimedOnChain=${c.claimedCount} beneficiary=${c.beneficiary}`);
+
     try {
       const beneficiary = Address.parse(c.beneficiary);
       console.log(`[autoclaim] #${c.index}: signing proof for earnedCount=${earnedCount}, beneficiary=${c.beneficiary}`);
@@ -146,6 +160,26 @@ export async function autoClaimJob() {
       if (confirmed) {
         markChallengeClaimed(c.index);
         console.log(`[autoclaim] #${c.index}: CLAIMED ${earnedCount}/${c.totalCheckpoints} checkpoints for ${c.beneficiary}`);
+
+        // Send Telegram notification
+        const beneficiaryRaw = beneficiary.toRawString();
+        const chatId = getTelegramChatIdByBeneficiary(beneficiaryRaw);
+        if (chatId) {
+          const [app, action] = c.challengeId.split(":");
+          const newCheckpoints = earnedCount - c.claimedCount;
+          const payoutTon = (newCheckpoints * Number(c.amountPerCheckpoint)) / 1e9;
+          const sent = await sendTelegramMessage(chatId, formatClaimNotification({
+            challengeIdx: c.index,
+            earnedCount,
+            totalCheckpoints: c.totalCheckpoints,
+            payoutTon,
+            app,
+            action,
+          }));
+          console.log(`[autoclaim] Telegram notification to ${chatId}: ${sent ? "sent" : "failed"}`);
+        } else {
+          console.log(`[autoclaim] No telegram chat ID for beneficiary, skipping notification`);
+        }
       } else {
         console.warn(`[autoclaim] #${c.index}: tx sent but confirmation timed out`);
       }

@@ -3,7 +3,18 @@ import { Link } from "react-router-dom";
 import { useTonAddress, useTonConnectUI } from "@tonconnect/ui-react";
 import { normalizeAddress } from "../contract";
 import { useChallengeCache, type IndexedChallenge } from "../challenge-cache";
-import { APP_LABELS, formatActionLabel, parseChallengeId } from "../types/challenge";
+import { App, APP_ACTIONS, APP_LABELS, formatActionLabel, parseChallengeId } from "../types/challenge";
+import { backendApi } from "../api";
+
+type ChallengeStatusFilter = "ALL" | "ACTIVE" | "READY" | "COMPLETED" | "EXPIRED";
+
+const STATUS_OPTIONS: { value: ChallengeStatusFilter; label: string }[] = [
+  { value: "ALL", label: "Any status" },
+  { value: "ACTIVE", label: "Active" },
+  { value: "READY", label: "Ready" },
+  { value: "COMPLETED", label: "Completed" },
+  { value: "EXPIRED", label: "Expired" },
+];
 
 function formatTonAmount(value: bigint | number) {
   const ton = Number(value) / 1e9;
@@ -86,11 +97,6 @@ function ChallengeCard({
         : statusKey === "expired"
           ? "Expired"
           : "Active";
-  const nextUnlockLabel = fullyReleased
-    ? "All reward released"
-    : earnedCount >= challenge.totalCheckpoints
-      ? `${formatTonAmount(challenge.amountPerCheckpoint)} TON ready`
-      : `${formatTonAmount(challenge.amountPerCheckpoint)} TON next`;
   const visibleSteps = getVisibleStepCount(challenge.totalCheckpoints);
   const hiddenSteps = Math.max(0, challenge.totalCheckpoints - visibleSteps);
 
@@ -121,16 +127,10 @@ function ChallengeCard({
       </div>
 
       <div className="vault-progress-row">
-        <div>
-          <span className="vault-progress-label">Progress</span>
-          <span className="vault-progress-value">
-            {earnedCount} / {challenge.totalCheckpoints} checkpoints
-          </span>
-        </div>
-        <div>
-          <span className="vault-progress-label">Next unlock</span>
-          <span className="vault-next-value">{nextUnlockLabel}</span>
-        </div>
+        <span className="vault-progress-label">Progress</span>
+        <span className="vault-progress-value">
+          {earnedCount} / {challenge.totalCheckpoints} checkpoints
+        </span>
       </div>
 
       <div className="vault-progress-track" aria-hidden="true">
@@ -169,6 +169,15 @@ export function Home() {
   useEffect(() => {
     void refreshChallenges();
   }, [refreshChallenges]);
+
+  useEffect(() => {
+    if (!userAddress) return;
+    const tg = (window as any).Telegram?.WebApp;
+    const chatId = tg?.initDataUnsafe?.user?.id;
+    if (chatId) {
+      backendApi.registerTelegramChatId(userAddress, chatId).catch(() => {});
+    }
+  }, [userAddress]);
 
   const myChallenges = userAddress
     ? challenges.filter((challenge) => {

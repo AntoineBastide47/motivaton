@@ -52,35 +52,6 @@ function collectAppUsers(
   return users;
 }
 
-function processChallengeEntries(
-  challenges: ActiveChallenge[],
-  normAddr: string,
-  app: string,
-  eventsByAction: Record<string, { id: string; count: number }[]>,
-) {
-  const userChallenges = challenges.filter((c) => {
-    const parts = c.challengeId.split(":");
-    return parts[0] === app && normalizeAddress(c.beneficiary) === normAddr;
-  });
-
-  for (const c of userChallenges) {
-    const action = c.challengeId.split(":")[1];
-    const since = new Date(c.createdAt * 1000);
-    // eventsByAction is already filtered by since at the call site for GitHub,
-    // but for LeetCode we filter here too
-    const entries = eventsByAction[action] ?? [];
-
-    if (entries.length > 0) {
-      const newEntries = addChallengeEvents(c.index, entries);
-      const totalNew = newEntries.reduce((sum, e) => sum + e.count, 0);
-      if (totalNew > 0) {
-        const newProgress = getChallengeProgress(c.index);
-        console.log(`[cron] Challenge #${c.index}: +${totalNew} ${action} → ${newProgress}/${c.totalCheckpoints}`);
-      }
-    }
-  }
-}
-
 async function eventsProgressJob() {
   let challenges;
   try {
@@ -102,6 +73,21 @@ async function eventsProgressJob() {
 
   const accounts = getAllAccounts();
 
+  // Group active challenges by app for logging
+  const byApp: Record<string, ActiveChallenge[]> = {};
+  for (const c of activeChallenges) {
+    const app = c.challengeId.split(":")[0];
+    if (!byApp[app]) byApp[app] = [];
+    byApp[app].push(c);
+  }
+  for (const [app, list] of Object.entries(byApp)) {
+    for (const c of list) {
+      const action = c.challengeId.split(":")[1];
+      const progress = getChallengeProgress(c.index);
+      console.log(`[cron] [${app}] #${c.index} ${action} ${progress}/${c.totalCheckpoints}`);
+    }
+  }
+
   // --- GitHub ---
   const githubUsers = collectAppUsers("GITHUB", activeChallenges, accounts);
   const githubCache = new Map<string, Awaited<ReturnType<typeof fetchUserEvents>>>();
@@ -116,17 +102,13 @@ async function eventsProgressJob() {
         githubCache.set(username, allEvents);
       }
 
-      // Find earliest challenge createdAt for this user to filter events
       const userChallenges = activeChallenges.filter((c) =>
         c.challengeId.startsWith("GITHUB:") && normalizeAddress(c.beneficiary) === normAddr,
       );
-      const earliestSince = new Date(Math.min(...userChallenges.map((c) => c.createdAt * 1000)));
-      const eventsByAction = extractEvents(allEvents, earliestSince);
 
-      // Re-filter per challenge since each may have a different createdAt
       for (const c of userChallenges) {
         const action = c.challengeId.split(":")[1];
-        const since = new Date(c.createdAt * 1000);
+        const since = new Date((c.createdAt + 60) * 1000);
         const filtered = extractEvents(allEvents, since);
         const entries = filtered[action] ?? [];
 
@@ -135,12 +117,12 @@ async function eventsProgressJob() {
           const totalNew = newEntries.reduce((sum, e) => sum + e.count, 0);
           if (totalNew > 0) {
             const newProgress = getChallengeProgress(c.index);
-            console.log(`[cron] Challenge #${c.index}: +${totalNew} ${action} → ${newProgress}/${c.totalCheckpoints}`);
+            console.log(`[cron] [GITHUB] #${c.index}: +${totalNew} ${action} → ${newProgress}/${c.totalCheckpoints}`);
           }
         }
       }
     } catch (err) {
-      console.error(`[cron] Failed to fetch GitHub events for @${username}:`, err);
+      console.error(`[cron] [GITHUB] Failed for @${username}:`, err);
     }
   }
 
@@ -155,7 +137,6 @@ async function eventsProgressJob() {
         c.challengeId.startsWith("LEETCODE:") && normalizeAddress(c.beneficiary) === normAddr,
       );
 
-      // Check if any challenge needs streak data
       const needsStreak = userChallenges.some((c) => c.challengeId.split(":")[1] === "MAINTAIN_STREAK");
       let streak = 0;
       if (needsStreak) {
@@ -164,19 +145,16 @@ async function eventsProgressJob() {
 
       for (const c of userChallenges) {
         const action = c.challengeId.split(":")[1];
-        const since = new Date(c.createdAt * 1000);
+        const since = new Date((c.createdAt + 60) * 1000);
 
         if (action === "MAINTAIN_STREAK") {
-          // Streak is a current value, not event-based. Store as a single entry with the streak count.
-          // Use a stable ID so we update rather than accumulate.
           const currentProgress = getChallengeProgress(c.index);
           if (streak > currentProgress) {
-            // Reset and store the new streak value
             const entries = [{ id: `streak_${username}`, count: streak - currentProgress }];
             const newEntries = addChallengeEvents(c.index, entries);
             if (newEntries.length > 0) {
               const newProgress = getChallengeProgress(c.index);
-              console.log(`[cron] Challenge #${c.index}: streak ${newProgress}/${c.totalCheckpoints}`);
+              console.log(`[cron] [LEETCODE] #${c.index}: streak → ${newProgress}/${c.totalCheckpoints}`);
             }
           }
           continue;
@@ -190,12 +168,12 @@ async function eventsProgressJob() {
           const totalNew = newEntries.reduce((sum, e) => sum + e.count, 0);
           if (totalNew > 0) {
             const newProgress = getChallengeProgress(c.index);
-            console.log(`[cron] Challenge #${c.index}: +${totalNew} ${action} → ${newProgress}/${c.totalCheckpoints}`);
+            console.log(`[cron] [LEETCODE] #${c.index}: +${totalNew} ${action} → ${newProgress}/${c.totalCheckpoints}`);
           }
         }
       }
     } catch (err) {
-      console.error(`[cron] Failed to fetch LeetCode submissions for @${username}:`, err);
+      console.error(`[cron] [LEETCODE] Failed for @${username}:`, err);
     }
   }
 
@@ -212,7 +190,7 @@ async function eventsProgressJob() {
 
       for (const c of userChallenges) {
         const action = c.challengeId.split(":")[1];
-        const since = new Date(c.createdAt * 1000);
+        const since = new Date((c.createdAt + 60) * 1000);
         const eventsByAction = extractChessComEvents(games, username, since);
         const entries = eventsByAction[action] ?? [];
 
@@ -221,12 +199,12 @@ async function eventsProgressJob() {
           const totalNew = newEntries.reduce((sum, e) => sum + e.count, 0);
           if (totalNew > 0) {
             const newProgress = getChallengeProgress(c.index);
-            console.log(`[cron] Challenge #${c.index}: +${totalNew} ${action} → ${newProgress}/${c.totalCheckpoints}`);
+            console.log(`[cron] [CHESSCOM] #${c.index}: +${totalNew} ${action} → ${newProgress}/${c.totalCheckpoints}`);
           }
         }
       }
     } catch (err) {
-      console.error(`[cron] Failed to fetch Chess.com games for @${username}:`, err);
+      console.error(`[cron] [CHESSCOM] Failed for @${username}:`, err);
     }
   }
 
@@ -235,7 +213,6 @@ async function eventsProgressJob() {
 
   for (const [normAddr, { wallet, username, token }] of stravaUsers) {
     try {
-      // Refresh token if expired
       const creds = Object.values(accounts).find((_, i) => {
         const w = Object.keys(accounts)[i];
         return normalizeAddress(w) === normAddr;
@@ -244,7 +221,6 @@ async function eventsProgressJob() {
       if (creds?.strava && creds.strava.expiresAt <= Date.now()) {
         const refreshed = await refreshStravaTokens(creds.strava.refreshToken);
         accessToken = refreshed.accessToken;
-        // Update stored tokens
         const walletKey = Object.keys(accounts).find((w) => normalizeAddress(w) === normAddr)!;
         const { setAccount } = await import("./store.js");
         setAccount(walletKey, {
@@ -260,7 +236,7 @@ async function eventsProgressJob() {
 
       for (const c of userChallenges) {
         const action = c.challengeId.split(":")[1];
-        const since = new Date(c.createdAt * 1000);
+        const since = new Date((c.createdAt + 60) * 1000);
         const eventsByAction = extractStravaEvents(activities, since);
         const entries = eventsByAction[action] ?? [];
 
@@ -269,12 +245,12 @@ async function eventsProgressJob() {
           const totalNew = newEntries.reduce((sum, e) => sum + e.count, 0);
           if (totalNew > 0) {
             const newProgress = getChallengeProgress(c.index);
-            console.log(`[cron] Challenge #${c.index}: +${totalNew} ${action} → ${newProgress}/${c.totalCheckpoints}`);
+            console.log(`[cron] [STRAVA] #${c.index}: +${totalNew} ${action} → ${newProgress}/${c.totalCheckpoints}`);
           }
         }
       }
     } catch (err) {
-      console.error(`[cron] Failed to fetch Strava activities for athlete ${username}:`, err);
+      console.error(`[cron] [STRAVA] Failed for athlete ${username}:`, err);
     }
   }
 }

@@ -142,4 +142,11 @@ export const backendApi = {
   getAllProgress() {
     return request<{ progress: Record<string, number>; claimed: Record<string, boolean> }>("/progress");
   },
+
+  registerTelegramChatId(walletAddress: string, chatId: string | number) {
+    return request<{ ok: boolean }>("/auth/telegram/register", {
+      method: "POST",
+      body: JSON.stringify({ walletAddress, chatId: String(chatId) }),
+    });
+  },
 };

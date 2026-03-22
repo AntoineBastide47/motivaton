@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { randomBytes } from "crypto";
-import { setAccount, getAccount, removeAccountApp } from "../store.js";
+import { setAccount, getAccount, removeAccountApp, setTelegramChatId } from "../store.js";
 import { verifyGitHubToken } from "../github.js";
 import { verifyLeetCodeUsername } from "../leetcode.js";
 import { verifyChessComUsername } from "../chesscom.js";
@@ -302,5 +302,18 @@ authRouter.post("/strava/disconnect", (req, res) => {
     return;
   }
   removeAccountApp(walletAddress, "strava");
+  res.json({ ok: true });
+});
+
+// --- Telegram chat ID registration ---
+
+authRouter.post("/telegram/register", (req, res) => {
+  const { walletAddress, chatId } = req.body;
+  if (!walletAddress || !chatId) {
+    res.status(400).json({ error: "walletAddress and chatId are required." });
+    return;
+  }
+  setTelegramChatId(walletAddress, String(chatId));
+  console.log(`[auth] Registered telegram chatId=${chatId} for wallet ${walletAddress.slice(0, 12)}...`);
   res.json({ ok: true });
 });

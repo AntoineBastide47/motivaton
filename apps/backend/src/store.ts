@@ -37,7 +37,8 @@ function getDb(): Database.Database {
       strava_access_token TEXT,
       strava_refresh_token TEXT,
       strava_expires_at INTEGER,
-      strava_athlete_id INTEGER
+      strava_athlete_id INTEGER,
+      telegram_chat_id TEXT
     );
 
     CREATE TABLE IF NOT EXISTS challenge_events (
@@ -64,6 +65,9 @@ function getDb(): Database.Database {
   }
   if (!accountCols.some((c) => c.name === "chesscom_username")) {
     db.exec("ALTER TABLE accounts ADD COLUMN chesscom_username TEXT");
+  }
+  if (!accountCols.some((c) => c.name === "telegram_chat_id")) {
+    db.exec("ALTER TABLE accounts ADD COLUMN telegram_chat_id TEXT");
   }
   if (!accountCols.some((c) => c.name === "strava_access_token")) {
     db.exec("ALTER TABLE accounts ADD COLUMN strava_access_token TEXT");
@@ -285,4 +289,33 @@ export function getAllClaimed(): Record<string, boolean> {
     result[String(row.challenge_idx)] = true;
   }
   return result;
+}
+
+// -- Telegram chat ID --
+
+export function setTelegramChatId(walletAddress: string, chatId: string) {
+  db().prepare(`
+    INSERT INTO accounts (wallet_address, telegram_chat_id)
+    VALUES (?, ?)
+    ON CONFLICT(wallet_address) DO UPDATE SET
+      telegram_chat_id = excluded.telegram_chat_id
+  `).run(walletAddress, chatId);
+}
+
+export function getTelegramChatId(walletAddress: string): string | null {
+  const row = db().prepare("SELECT telegram_chat_id FROM accounts WHERE wallet_address = ?").get(walletAddress) as { telegram_chat_id: string | null } | undefined;
+  return row?.telegram_chat_id ?? null;
+}
+
+export function getTelegramChatIdByBeneficiary(beneficiaryRaw: string): string | null {
+  const rows = db().prepare("SELECT wallet_address, telegram_chat_id FROM accounts WHERE telegram_chat_id IS NOT NULL").all() as { wallet_address: string; telegram_chat_id: string }[];
+  for (const row of rows) {
+    try {
+      const { Address } = require("@ton/core");
+      if (Address.parse(row.wallet_address).toRawString() === beneficiaryRaw) {
+        return row.telegram_chat_id;
+      }
+    } catch {}
+  }
+  return null;
 }
