@@ -721,18 +721,29 @@ export function ChallengeDetail() {
             </div>
           </section>
 
-          {showConnectPrompt && (
-            <section className="panel panel-accent next-panel">
+          {isBeneficiary && connectableKey && (
+            <section className={`panel ${!appConnected && isOpen ? "panel-accent" : "panel-soft"} next-panel`}>
               <div className="section-kicker">{appLabel} account</div>
-              <h2 className="section-title">Connect {appLabel}</h2>
+              <h2 className="section-title">
+                {appConnected
+                  ? `${appLabel} connected`
+                  : isOpen
+                    ? `Connect ${appLabel}`
+                    : `${appLabel} not linked`}
+              </h2>
               <div className="next-copy">
                 <p className="support-copy tight">
-                  Link your {appLabel} account so this path can track live activity and unlock reward slices.
-                  Without this connection, the challenge cannot verify your progress.
+                  {appConnected
+                    ? connectedUsername
+                      ? <>Synced as <strong>{connectableKey === "github" ? `@${connectedUsername}` : connectedUsername}</strong>. Your {actionLabel.toLowerCase()} activity is being tracked automatically.</>
+                      : <>Your {appLabel} account is connected. Activity is being tracked automatically.</>
+                    : isOpen
+                      ? <>Link your {appLabel} account so this path can track live activity and unlock reward slices. Without this connection, the challenge cannot verify your progress.</>
+                      : <>No {appLabel} account was connected while this path was live.</>}
                 </p>
               </div>
 
-              {needsUsernameInput && (
+              {!appConnected && isOpen && needsUsernameInput && (
                 <input
                   className="inline-input"
                   placeholder={`Your ${appLabel} username`}
@@ -741,37 +752,13 @@ export function ChallengeDetail() {
                 />
               )}
 
-              <div className="next-actions">
-                <button className="primary-button" onClick={handleConnectApp} disabled={connecting}>
-                  {connecting ? `Connecting ${appLabel}...` : `Connect ${appLabel}`}
-                </button>
-              </div>
-            </section>
-          )}
-
-          {showConnectedState && (
-            <section className="panel panel-soft next-panel">
-              <div className="section-kicker">{appLabel} account</div>
-              <h2 className="section-title">Tracking live</h2>
-              <div className="next-copy">
-                <p className="support-copy tight">
-                  {connectedUsername
-                    ? <>Synced as {connectableKey === "github" ? `@${connectedUsername}` : connectedUsername}. Your {actionLabel.toLowerCase()} activity is being tracked automatically.</>
-                    : <>Your {appLabel} account is connected. Activity is being tracked automatically.</>}
-                </p>
-              </div>
-            </section>
-          )}
-
-          {showEndedWarning && (
-            <section className="panel panel-soft next-panel">
-              <div className="section-kicker">{appLabel} account</div>
-              <h2 className="section-title">{appLabel} was never linked</h2>
-              <div className="next-copy">
-                <p className="support-copy tight">
-                  No {appLabel} account was connected while this path was live. No verified activity was recorded.
-                </p>
-              </div>
+              {!appConnected && isOpen && (
+                <div className="next-actions">
+                  <button className="primary-button" onClick={handleConnectApp} disabled={connecting}>
+                    {connecting ? `Connecting ${appLabel}...` : `Connect ${appLabel}`}
+                  </button>
+                </div>
+              )}
             </section>
           )}
 

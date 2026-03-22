@@ -161,22 +161,9 @@ export function CreateChallenge() {
             </div>
           </div>
 
-          <div className="topbar-meta">
-            <div className="signal-stack" aria-hidden="true">
-              <div className={`signal ${userAddress ? "is-on" : ""}`}>
-                <span className="signal-dot" />
-                <span>{userAddress ? "Wallet active" : "Wallet needed"}</span>
-              </div>
-              <div className="signal is-on">
-                <span className="signal-dot" />
-                <span>{APP_LABELS[app]} path</span>
-              </div>
-            </div>
-
-            <button type="button" className="wallet-control" onClick={() => void tonConnectUI.openModal()}>
-              {userAddress ? formatWalletPreview(userAddress) : "Connect"}
-            </button>
-          </div>
+          <button type="button" className="wallet-control" onClick={() => void tonConnectUI.openModal()}>
+            {userAddress ? formatWalletPreview(userAddress) : "Connect"}
+          </button>
         </div>
       </header>
 
