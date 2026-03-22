@@ -269,6 +269,10 @@ export function markChallengeClaimed(challengeIdx: number) {
   db().prepare("INSERT OR IGNORE INTO challenge_claims (challenge_idx, claimed_at) VALUES (?, ?)").run(challengeIdx, Date.now());
 }
 
+export function clearChallengeClaimed(challengeIdx: number) {
+  db().prepare("DELETE FROM challenge_claims WHERE challenge_idx = ?").run(challengeIdx);
+}
+
 export function isChallengeClaimed(challengeIdx: number): boolean {
   const row = db().prepare("SELECT 1 FROM challenge_claims WHERE challenge_idx = ?").get(challengeIdx);
   return row != null;

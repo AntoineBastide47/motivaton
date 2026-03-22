@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getChallengeProgress, getChallengeEvents, getAllProgress, isChallengeClaimed, getAllClaimed } from "../store.js";
+import { getChallengeProgress, getChallengeEvents, getAllProgress, isChallengeClaimed, getAllClaimed, clearChallengeClaimed } from "../store.js";
 import { getChallenge } from "../chain.js";
 import { progressJob } from "../cron.js";
 
@@ -46,6 +46,17 @@ debugRouter.get("/cron/trigger", async (_req, res) => {
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
+});
+
+debugRouter.get("/unclaim/:challengeIdx", (req, res) => {
+  const challengeIdx = parseInt(req.params.challengeIdx, 10);
+  if (isNaN(challengeIdx)) {
+    res.status(400).json({ error: "Invalid challengeIdx" });
+    return;
+  }
+  clearChallengeClaimed(challengeIdx);
+  console.log(`[debug] Cleared claim for challenge #${challengeIdx}`);
+  res.json({ ok: true, challengeIdx });
 });
 
 debugRouter.get("/health", (_req, res) => {
