@@ -31,7 +31,8 @@ function getDb(): Database.Database {
     CREATE TABLE IF NOT EXISTS accounts (
       wallet_address TEXT PRIMARY KEY,
       github_access_token TEXT,
-      github_username TEXT
+      github_username TEXT,
+      leetcode_username TEXT
     );
 
     CREATE TABLE IF NOT EXISTS challenge_events (
@@ -47,10 +48,14 @@ function getDb(): Database.Database {
     );
   `);
 
-  // Migration: add count column if missing (table created before this column existed)
-  const cols = db.prepare("PRAGMA table_info(challenge_events)").all() as { name: string }[];
-  if (!cols.some((c) => c.name === "count")) {
+  // Migrations
+  const eventCols = db.prepare("PRAGMA table_info(challenge_events)").all() as { name: string }[];
+  if (!eventCols.some((c) => c.name === "count")) {
     db.exec("ALTER TABLE challenge_events ADD COLUMN count INTEGER NOT NULL DEFAULT 1");
+  }
+  const accountCols = db.prepare("PRAGMA table_info(accounts)").all() as { name: string }[];
+  if (!accountCols.some((c) => c.name === "leetcode_username")) {
+    db.exec("ALTER TABLE accounts ADD COLUMN leetcode_username TEXT");
   }
 
   return db;
@@ -69,20 +74,34 @@ export interface GitHubCredentials {
   username: string;
 }
 
-export interface AppCredentials {
-  github?: GitHubCredentials;
+export interface LeetCodeCredentials {
+  username: string;
 }
 
-function rowToCredentials(row: { github_access_token: string | null; github_username: string | null }): AppCredentials {
+export interface AppCredentials {
+  github?: GitHubCredentials;
+  leetcode?: LeetCodeCredentials;
+}
+
+interface AccountRow {
+  github_access_token: string | null;
+  github_username: string | null;
+  leetcode_username: string | null;
+}
+
+function rowToCredentials(row: AccountRow): AppCredentials {
   const creds: AppCredentials = {};
   if (row.github_access_token && row.github_username) {
     creds.github = { accessToken: row.github_access_token, username: row.github_username };
+  }
+  if (row.leetcode_username) {
+    creds.leetcode = { username: row.leetcode_username };
   }
   return creds;
 }
 
 export function getAccount(walletAddress: string): AppCredentials | null {
-  const row = db().prepare("SELECT github_access_token, github_username FROM accounts WHERE wallet_address = ?").get(walletAddress) as { github_access_token: string | null; github_username: string | null } | undefined;
+  const row = db().prepare("SELECT github_access_token, github_username, leetcode_username FROM accounts WHERE wallet_address = ?").get(walletAddress) as AccountRow | undefined;
   if (!row) return null;
   const creds = rowToCredentials(row);
   return Object.keys(creds).length > 0 ? creds : null;
@@ -98,16 +117,27 @@ export function setAccount(walletAddress: string, creds: Partial<AppCredentials>
         github_username = excluded.github_username
     `).run(walletAddress, creds.github.accessToken, creds.github.username);
   }
+  if (creds.leetcode) {
+    db().prepare(`
+      INSERT INTO accounts (wallet_address, leetcode_username)
+      VALUES (?, ?)
+      ON CONFLICT(wallet_address) DO UPDATE SET
+        leetcode_username = excluded.leetcode_username
+    `).run(walletAddress, creds.leetcode.username);
+  }
 }
 
 export function removeAccountApp(walletAddress: string, app: keyof AppCredentials) {
   if (app === "github") {
     db().prepare("UPDATE accounts SET github_access_token = NULL, github_username = NULL WHERE wallet_address = ?").run(walletAddress);
   }
+  if (app === "leetcode") {
+    db().prepare("UPDATE accounts SET leetcode_username = NULL WHERE wallet_address = ?").run(walletAddress);
+  }
 }
 
 export function getAllAccounts(): Record<string, AppCredentials> {
-  const rows = db().prepare("SELECT wallet_address, github_access_token, github_username FROM accounts").all() as { wallet_address: string; github_access_token: string | null; github_username: string | null }[];
+  const rows = db().prepare("SELECT wallet_address, github_access_token, github_username, leetcode_username FROM accounts").all() as (AccountRow & { wallet_address: string })[];
   const result: Record<string, AppCredentials> = {};
   for (const row of rows) {
     const creds = rowToCredentials(row);

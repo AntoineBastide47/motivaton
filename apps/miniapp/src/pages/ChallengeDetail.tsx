@@ -16,11 +16,11 @@ import { backendApi, type VerificationResult, type AuthStatus } from "../api";
 import { useChallengeCache } from "../challenge-cache";
 import { APP_LABELS, formatActionLabel, parseChallengeId } from "../types/challenge";
 
-const OAUTH_APPS = ["github"] as const;
+const CONNECTABLE_APPS = ["github", "leetcode"] as const;
 
-function getOAuthAppKey(appKey: string): (typeof OAUTH_APPS)[number] | null {
-  const authKey = appKey.toLowerCase() as (typeof OAUTH_APPS)[number];
-  return OAUTH_APPS.includes(authKey) ? authKey : null;
+function getConnectableAppKey(appKey: string): (typeof CONNECTABLE_APPS)[number] | null {
+  const authKey = appKey.toLowerCase() as (typeof CONNECTABLE_APPS)[number];
+  return CONNECTABLE_APPS.includes(authKey) ? authKey : null;
 }
 
 type IndexedChallenge = OnChainChallenge & { index: number };
@@ -65,6 +65,7 @@ export function ChallengeDetail() {
   const [userContribution, setUserContribution] = useState<bigint | null>(null);
   const [creatorContribution, setCreatorContribution] = useState<bigint | null>(null);
   const [duolingoInput, setDuolingoInput] = useState("");
+  const [leetcodeInput, setLeetcodeInput] = useState("");
   const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [backendProgress, setBackendProgress] = useState<number>(
@@ -174,21 +175,6 @@ export function ChallengeDetail() {
       }
 
       const body = buildClaimAllBody(idx, proof.earnedCount, proof.signature);
-      const boc = body.toBoc().toString("base64");
-
-      // Log claim debug data to backend
-      fetch(`${import.meta.env.VITE_API_URL || "/api"}/claim-log`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userAddress,
-          contractAddress: CONTRACT_ADDRESS,
-          challengeIdx: idx,
-          earnedCount: proof.earnedCount,
-          signature: proof.signature,
-          boc,
-        }),
-      }).catch(() => {});
 
       await tonConnectUI.sendTransaction({
         validUntil: Math.floor(Date.now() / 1000) + 600,
@@ -239,17 +225,25 @@ export function ChallengeDetail() {
   async function handleConnectApp() {
     if (!userAddress || !challenge) return;
     const { app } = parseChallengeId(challenge.challengeId);
-    const oauthAppKey = getOAuthAppKey(app);
+    const connectableKey = getConnectableAppKey(app);
 
-    if (!oauthAppKey) return;
+    if (!connectableKey) return;
 
     setConnecting(true);
     try {
-      switch (oauthAppKey) {
+      switch (connectableKey) {
         case "github": {
           const { url } = await backendApi.startGitHubOAuth(userAddress, idx);
-          // Redirect in the same window — callback will redirect back
           window.location.href = url;
+          return;
+        }
+        case "leetcode": {
+          if (!leetcodeInput.trim()) {
+            alert("Enter your LeetCode username.");
+            return;
+          }
+          await backendApi.connectLeetCode(userAddress, leetcodeInput.trim());
+          await loadChallenge({ forceRefresh: true });
           return;
         }
       }
@@ -350,13 +344,14 @@ export function ChallengeDetail() {
   const normalizedUserAddress = userAddress ? normalizeAddress(userAddress) : "";
   const isBeneficiary = normalizedUserAddress !== "" && normalizeAddress(challenge.beneficiary) === normalizedUserAddress;
   const isSponsor = normalizedUserAddress !== "" && normalizeAddress(challenge.sponsor) === normalizedUserAddress;
-  const oauthAppKey = getOAuthAppKey(appKey);
-  const oauthConnection = oauthAppKey ? authStatus?.[oauthAppKey] : undefined;
-  const appConnected = oauthConnection?.connected === true;
-  const connectedUsername = oauthConnection?.username;
-  const showOAuthConnectPrompt = isBeneficiary && isOpen && oauthAppKey !== null && !appConnected;
-  const showOAuthConnectedState = isBeneficiary && isOpen && oauthAppKey !== null && appConnected;
-  const showOAuthEndedWarning = isBeneficiary && !isOpen && expired && !fullyCompleted && oauthAppKey !== null && !appConnected;
+  const connectableKey = getConnectableAppKey(appKey);
+  const appConnection = connectableKey ? authStatus?.[connectableKey] : undefined;
+  const appConnected = appConnection?.connected === true;
+  const connectedUsername = appConnection?.username;
+  const showConnectPrompt = isBeneficiary && isOpen && connectableKey !== null && !appConnected;
+  const showConnectedState = isBeneficiary && isOpen && connectableKey !== null && appConnected;
+  const showEndedWarning = isBeneficiary && !isOpen && expired && !fullyCompleted && connectableKey !== null && !appConnected;
+  const needsUsernameInput = connectableKey === "leetcode";
   const canClaimRewards = isBeneficiary && !backendClaimed && (expired || fullyCompleted);
   const showManualVerificationInput = canClaimRewards && appKey === "DUOLINGO";
 
@@ -417,24 +412,33 @@ export function ChallengeDetail() {
         )}
       </section>
 
-      {showOAuthConnectPrompt && (
+      {showConnectPrompt && (
         <section className="surface surface-accent section-panel action-panel">
           <div className="section-header">
             <div>
               <h2 className="section-title">Connect {appLabel}</h2>
               <p className="section-note">
-                Link your {appLabel} account so your daily activity is tracked automatically.
+                Link your {appLabel} account so your activity is tracked automatically.
                 Without this, the challenge cannot verify your progress.
               </p>
             </div>
           </div>
+          {needsUsernameInput && (
+            <input
+              className="form-input"
+              placeholder={`Your ${appLabel} username`}
+              value={leetcodeInput}
+              onChange={(e) => setLeetcodeInput(e.target.value)}
+              style={{ marginBottom: "0.75rem" }}
+            />
+          )}
           <button className="button-primary button-full" onClick={handleConnectApp} disabled={connecting}>
             {connecting ? "Connecting..." : `Connect ${appLabel}`}
           </button>
         </section>
       )}
 
-      {showOAuthConnectedState && (
+      {showConnectedState && (
         <section className="surface section-panel app-status-panel">
           <div className="section-header">
             <div>
@@ -449,7 +453,7 @@ export function ChallengeDetail() {
         </section>
       )}
 
-      {showOAuthEndedWarning && (
+      {showEndedWarning && (
         <section className="surface section-panel app-status-panel">
           <div className="section-header">
             <div>

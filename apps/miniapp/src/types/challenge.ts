@@ -1,6 +1,7 @@
 /** Supported productivity apps */
 export enum App {
   Github = "GITHUB",
+  LeetCode = "LEETCODE",
 }
 
 /** Actions available per app */
@@ -12,7 +13,15 @@ export enum GithubAction {
   Review = "REVIEW",
 }
 
-export type AppAction = GithubAction;
+export enum LeetCodeAction {
+  SolveProblem = "SOLVE_PROBLEM",
+  SolveEasy = "SOLVE_EASY",
+  SolveMedium = "SOLVE_MEDIUM",
+  SolveHard = "SOLVE_HARD",
+  MaintainStreak = "MAINTAIN_STREAK",
+}
+
+export type AppAction = GithubAction | LeetCodeAction;
 
 /** Map from App to its available actions */
 export const APP_ACTIONS: Record<App, { value: AppAction; label: string }[]> = {
@@ -23,10 +32,18 @@ export const APP_ACTIONS: Record<App, { value: AppAction; label: string }[]> = {
     { value: GithubAction.OpenIssue, label: "Open Issue" },
     { value: GithubAction.Review, label: "Code Review" },
   ],
+  [App.LeetCode]: [
+    { value: LeetCodeAction.SolveProblem, label: "Solve Any Problem" },
+    { value: LeetCodeAction.SolveEasy, label: "Solve Easy" },
+    { value: LeetCodeAction.SolveMedium, label: "Solve Medium" },
+    { value: LeetCodeAction.SolveHard, label: "Solve Hard" },
+    { value: LeetCodeAction.MaintainStreak, label: "Maintain Streak" },
+  ],
 };
 
 export const APP_LABELS: Record<App, string> = {
   [App.Github]: "GitHub",
+  [App.LeetCode]: "LeetCode",
 };
 
 /** Challenge as submitted from the form */

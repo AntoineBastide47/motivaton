@@ -48,6 +48,7 @@ export interface AuthConnection {
 
 export interface AuthStatus {
   github: AuthConnection;
+  leetcode: AuthConnection;
 }
 
 /** Backend API — verification, signing, and auth */
@@ -84,6 +85,20 @@ export const backendApi = {
 
   disconnectGitHub(walletAddress: string) {
     return request<{ ok: boolean }>("/auth/github/disconnect", {
+      method: "POST",
+      body: JSON.stringify({ walletAddress }),
+    });
+  },
+
+  connectLeetCode(walletAddress: string, username: string) {
+    return request<{ ok: boolean; username: string }>("/auth/leetcode/connect", {
+      method: "POST",
+      body: JSON.stringify({ walletAddress, username }),
+    });
+  },
+
+  disconnectLeetCode(walletAddress: string) {
+    return request<{ ok: boolean }>("/auth/leetcode/disconnect", {
       method: "POST",
       body: JSON.stringify({ walletAddress }),
     });
