@@ -15,8 +15,9 @@ debugRouter.get("/challenge/:idx", async (req, res) => {
     const challenge = await getChallenge(idx);
     const progress = getChallengeProgress(idx);
     const events = getChallengeEvents(idx);
+    const claimed = isChallengeClaimed(idx);
     res.setHeader("Content-Type", "application/json");
-    res.send(JSON.stringify({ challenge, progress, events }, (_k, v) => typeof v === "bigint" ? v.toString() : v, 2));
+    res.send(JSON.stringify({ challenge, progress, events, claimed }, (_k, v) => typeof v === "bigint" ? v.toString() : v, 2));
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
@@ -45,18 +46,6 @@ debugRouter.get("/cron/trigger", async (_req, res) => {
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
-});
-
-debugRouter.post("/claim-log", (req, res) => {
-  const { userAddress, contractAddress, challengeIdx, earnedCount, signature, boc } = req.body;
-  console.log(`[claim-debug] userAddress: ${userAddress}`);
-  console.log(`[claim-debug] contractAddress from frontend: "${contractAddress}"`);
-  console.log(`[claim-debug] contractAddress from env: "${process.env.CONTRACT_ADDRESS}"`);
-  console.log(`[claim-debug] challengeIdx: ${challengeIdx}, earnedCount: ${earnedCount}`);
-  console.log(`[claim-debug] signature: ${signature}`);
-  console.log(`[claim-debug] boc: ${boc}`);
-  console.log(`[claim-debug] expected boc: te6cckEBAgEAUQABGPnkPrYAAAAAAAAAAQEAgMqTDoAQ3t0ltw0e8x77ajEbQBB0mjbiau3DKsZzZnVEt6jQrVMo48+gtdpPJdsGy28vflBZGjf19pqC1E7siwzvekO6`);
-  res.json({ ok: true });
 });
 
 debugRouter.get("/health", (_req, res) => {

@@ -59,9 +59,6 @@ async function eventsProgressJob() {
   const now = Date.now() / 1000;
   const activeChallenges = challenges.filter((c) => {
     if (!c.active || c.endDate <= now) return false;
-    // Temporarily skip completion/claim check for OPEN_ISSUE to debug
-    const action = c.challengeId.split(":")[1];
-    if (action === "OPEN_ISSUE") return true;
     if (isChallengeClaimed(c.index)) return false;
     const progress = getChallengeProgress(c.index);
     if (progress >= c.totalCheckpoints) return false;
@@ -71,13 +68,6 @@ async function eventsProgressJob() {
 
   const accounts = getAllAccounts();
   const users = collectGitHubUsers(activeChallenges, accounts);
-
-  console.log(`[cron] ${activeChallenges.length} active challenges, ${users.size} linked users`);
-
-  for (const c of activeChallenges) {
-    const [app, action] = c.challengeId.split(":");
-    console.log(`[cron]   Challenge #${c.index}: app=${app} action=${action} target=${c.totalCheckpoints} progress=${getChallengeProgress(c.index)} beneficiary=${c.beneficiary}`);
-  }
 
   // Cache fetched events per user (avoid duplicate API calls)
   const userEventsCache = new Map<string, Awaited<ReturnType<typeof fetchUserEvents>>>();
@@ -96,21 +86,6 @@ async function eventsProgressJob() {
       continue;
     }
 
-    const prEvents = allEvents.filter((e) => e.type === "PullRequestEvent");
-    const issueEvents = allEvents.filter((e) => e.type === "IssuesEvent");
-    console.log(`[cron] @${username}: ${allEvents.length} total events, ${prEvents.length} PREvents, ${issueEvents.length} IssueEvents`);
-    for (const pe of prEvents.slice(0, 3)) {
-      const pl = pe.payload as Record<string, unknown>;
-      const pr = pl.pull_request as Record<string, unknown> | undefined;
-      console.log(`[cron]   PREvent ${pe.id}: action=${pl.action} merged=${pr?.merged} created_at=${pe.created_at}`);
-    }
-    for (const ie of issueEvents.slice(0, 5)) {
-      const pl = ie.payload as Record<string, unknown>;
-      const issue = pl.issue as Record<string, unknown> | undefined;
-      console.log(`[cron]   IssueEvent ${ie.id}: action=${pl.action} issue_title="${issue?.title}" issue_created_at=${issue?.created_at} event_created_at=${ie.created_at}`);
-    }
-
-    // Process each challenge for this user
     const userChallenges = activeChallenges.filter((c) => {
       const parts = c.challengeId.split(":");
       return parts[0] === "GITHUB" && normalizeAddress(c.beneficiary) === normAddr;
@@ -122,26 +97,21 @@ async function eventsProgressJob() {
       const eventsByAction = extractEvents(allEvents, since);
       const entries = eventsByAction[action] ?? [];
 
-      const totalFound = entries.reduce((sum, e) => sum + e.count, 0);
-      const prevProgress = getChallengeProgress(c.index);
-      const newEntries = addChallengeEvents(c.index, entries);
-      const totalNew = newEntries.reduce((sum, e) => sum + e.count, 0);
-      const newProgress = getChallengeProgress(c.index);
-
-      console.log(
-        `[cron]   Challenge #${c.index} (${c.challengeId}): ` +
-        `since=${since.toISOString()} found ${totalFound} ${action}s (${entries.length} events), ${totalNew} new → ` +
-        `progress ${prevProgress} -> ${newProgress}/${c.totalCheckpoints}` +
-        (newEntries.length > 0 ? ` [${newEntries.map((e) => `${e.id}(${e.count})`).join(", ")}]` : ""),
-      );
+      if (entries.length > 0) {
+        const prevProgress = getChallengeProgress(c.index);
+        const newEntries = addChallengeEvents(c.index, entries);
+        const totalNew = newEntries.reduce((sum, e) => sum + e.count, 0);
+        if (totalNew > 0) {
+          const newProgress = getChallengeProgress(c.index);
+          console.log(`[cron] Challenge #${c.index}: +${totalNew} ${action} → ${newProgress}/${c.totalCheckpoints}`);
+        }
+      }
     }
   }
 }
 
 async function minuteJob() {
-  console.log("[cron] Starting minute job");
   await eventsProgressJob();
-  console.log("[cron] Minute job done");
 }
 
 export function startCronJobs() {
