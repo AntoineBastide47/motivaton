@@ -335,3 +335,25 @@ Key files:
 
 Follow-up gaps:
 - The redesign passes typecheck and build, but it still needs a real Telegram-device review to tune contrast, density, and TonConnect appearance against the new visual system.
+
+### 2026-03-22 - Mockup-Aligned Telegram Miniapp Rebuild
+
+Summary:
+- Reworked the miniapp shell, typography, color system, and component styling to align much more closely with the premium dark mobile reference direction shared by the product owner.
+- Rebuilt the `Home`, `CreateChallenge`, and `ChallengeDetail` screens around a tighter Telegram-first layout with stronger top bars, clearer money-first hierarchy, guided builder steps, and a route-style checkpoint presentation.
+- Preserved the existing challenge logic and merged provider scope, including the newer `LeetCode` support and the current funding / claim / refund / connection flows.
+
+Why it matters now:
+- The miniapp now communicates the product loop faster and presents progression as the emotional center instead of relying on scattered cards and explanatory copy.
+- Future UI work can iterate from a more opinionated mobile baseline that already reflects the desired visual direction instead of repeatedly restyling the older layout.
+
+Key files:
+- `apps/miniapp/src/index.css`
+- `apps/miniapp/src/pages/Home.tsx`
+- `apps/miniapp/src/pages/CreateChallenge.tsx`
+- `apps/miniapp/src/pages/ChallengeDetail.tsx`
+- `AGENTS.md`
+
+Follow-up gaps:
+- The redesign passes miniapp typecheck and build, but it still needs real Telegram-device review for safe-area feel, TonConnect modal ergonomics, and dense checkpoint lists on smaller phones.
+- Repo-wide typing still depends on unrelated backend state outside this UI pass.

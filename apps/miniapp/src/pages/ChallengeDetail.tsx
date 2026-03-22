@@ -1,37 +1,133 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate, useLocation } from "react-router-dom";
-import { useTonConnectUI, useTonAddress } from "@tonconnect/ui-react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { useTonAddress, useTonConnectUI } from "@tonconnect/ui-react";
 import {
-  getChallenge,
-  getSponsorContribution,
+  CONTRACT_ADDRESS,
   buildAddFundsBody,
   buildClaimAllBody,
   buildRefundUnclaimedBody,
-  CONTRACT_ADDRESS,
+  getChallenge,
+  getSponsorContribution,
   normalizeAddress,
   toNano,
   type OnChainChallenge,
 } from "../contract";
-import { backendApi, type VerificationResult, type AuthStatus } from "../api";
+import { backendApi, type AuthStatus, type VerificationResult } from "../api";
 import { useChallengeCache } from "../challenge-cache";
 import { APP_LABELS, formatActionLabel, parseChallengeId } from "../types/challenge";
 
 const CONNECTABLE_APPS = ["github", "leetcode"] as const;
+
+type IndexedChallenge = OnChainChallenge & { index: number };
+type ChallengeLocationState = { challenge?: IndexedChallenge };
+type RouteState = "claimed" | "ready" | "current" | "locked";
 
 function getConnectableAppKey(appKey: string): (typeof CONNECTABLE_APPS)[number] | null {
   const authKey = appKey.toLowerCase() as (typeof CONNECTABLE_APPS)[number];
   return CONNECTABLE_APPS.includes(authKey) ? authKey : null;
 }
 
-type IndexedChallenge = OnChainChallenge & { index: number };
-type ChallengeLocationState = { challenge?: IndexedChallenge };
-
-function buildClaimedMap(challenge: OnChainChallenge): boolean[] {
-  return Array.from({ length: challenge.totalCheckpoints }, (_, i) => i < challenge.claimedCount);
+function buildClaimedMap(challenge: OnChainChallenge) {
+  return Array.from({ length: challenge.totalCheckpoints }, (_, index) => index < challenge.claimedCount);
 }
 
 function formatWalletPreview(address: string) {
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  if (address.length <= 12) return address;
+  return `${address.slice(0, 4)}...${address.slice(-4)}`;
+}
+
+function formatTonAmount(value: bigint | number) {
+  const ton = Number(value) / 1e9;
+  if (!Number.isFinite(ton)) return "--";
+  if (ton >= 100) return ton.toFixed(0);
+  if (ton >= 10) return ton.toFixed(1).replace(/\.0$/, "");
+  return ton.toFixed(2).replace(/\.00$/, "");
+}
+
+function formatShortDate(timestamp: number) {
+  return new Date(timestamp * 1000).toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+}
+
+function formatRelativeDeadline(timestamp: number) {
+  const diffMs = timestamp * 1000 - Date.now();
+  const diffDays = Math.ceil(diffMs / 86400000);
+
+  if (diffDays <= 0) return "Ended";
+  if (diffDays === 1) return "1 day left";
+  return `${diffDays} days left`;
+}
+
+function getActionIcon(appKey: string, action: string) {
+  if (appKey === "LEETCODE") {
+    switch (action) {
+      case "SOLVE_HARD":
+        return "neurology";
+      case "MAINTAIN_STREAK":
+        return "local_fire_department";
+      default:
+        return "code_blocks";
+    }
+  }
+
+  switch (action) {
+    case "MERGE_PR":
+      return "merge";
+    case "CREATE_PR":
+      return "call_split";
+    case "OPEN_ISSUE":
+      return "bug_report";
+    case "REVIEW":
+      return "rate_review";
+    default:
+      return "terminal";
+  }
+}
+
+function getRouteState(params: {
+  index: number;
+  challenge: OnChainChallenge;
+  earnedCount: number;
+  fullyReleased: boolean;
+}): RouteState {
+  const { index, challenge, earnedCount, fullyReleased } = params;
+
+  if (fullyReleased || index < challenge.claimedCount) return "claimed";
+  if (index < earnedCount) return "ready";
+  if (index === earnedCount && earnedCount < challenge.totalCheckpoints) return "current";
+  return "locked";
+}
+
+function getRouteStateLabel(state: RouteState, canClaimRewards: boolean) {
+  switch (state) {
+    case "claimed":
+      return "Released";
+    case "ready":
+      return canClaimRewards ? "Ready" : "Matched";
+    case "current":
+      return "Now";
+    default:
+      return "Locked";
+  }
+}
+
+function getRouteCopy(state: RouteState, actionLabel: string, canClaimRewards: boolean) {
+  const actionCopy = actionLabel.toLowerCase();
+
+  switch (state) {
+    case "claimed":
+      return "Already released to the beneficiary.";
+    case "ready":
+      return canClaimRewards
+        ? "Verified and waiting for the claim transaction."
+        : `Progress matched. Claim opens when the path completes or expires.`;
+    case "current":
+      return `The next verified ${actionCopy} lands here.`;
+    default:
+      return `Unlocks after the earlier ${actionCopy} checkpoints are complete.`;
+  }
 }
 
 export function ChallengeDetail() {
@@ -42,7 +138,7 @@ export function ChallengeDetail() {
   const userAddress = useTonAddress();
   const { getCachedChallenge, progressMap, claimedMap, storeChallenge } = useChallengeCache();
 
-  const idx = parseInt(id || "0", 10);
+  const idx = Number.parseInt(id || "0", 10);
   const locationState = location.state as ChallengeLocationState | null;
   const cachedChallenge = getCachedChallenge(idx);
   const prefetchedChallenge =
@@ -55,6 +151,7 @@ export function ChallengeDetail() {
     prefetchedChallenge ? buildClaimedMap(prefetchedChallenge) : [],
   );
   const [loading, setLoading] = useState(prefetchedChallenge === null);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
   const [verification, setVerification] = useState<VerificationResult | null>(null);
   const [verifying, setVerifying] = useState(false);
@@ -90,6 +187,7 @@ export function ChallengeDetail() {
       prefetchedChallenge ? claimedMap[String(prefetchedChallenge.index)] ?? false : false,
     );
     setError("");
+
     void loadChallenge({
       seedChallenge: prefetchedChallenge,
       forceRefresh: prefetchedChallenge === null,
@@ -103,18 +201,22 @@ export function ChallengeDetail() {
     showBlockingLoader?: boolean;
   }) {
     const showBlockingLoader = options?.showBlockingLoader ?? challenge === null;
+
     if (showBlockingLoader) {
       setLoading(true);
     }
+
     setError("");
+
     try {
-      let c = options?.seedChallenge ?? challenge;
-      if (options?.forceRefresh || !c) {
-        c = await getChallenge(idx);
+      let nextChallenge = options?.seedChallenge ?? challenge;
+      if (options?.forceRefresh || !nextChallenge) {
+        nextChallenge = await getChallenge(idx);
       }
 
-      setChallenge(c);
-      if (!c) {
+      setChallenge(nextChallenge);
+
+      if (!nextChallenge) {
         setCheckpointMap([]);
         setUserContribution(null);
         setCreatorContribution(null);
@@ -122,9 +224,9 @@ export function ChallengeDetail() {
         return;
       }
 
-      const creatorContributionPromise = getSponsorContribution(idx, c.sponsor);
+      const creatorContributionPromise = getSponsorContribution(idx, nextChallenge.sponsor);
       const userContributionPromise = userAddress
-        ? userAddress === c.sponsor
+        ? userAddress === nextChallenge.sponsor
           ? creatorContributionPromise
           : getSponsorContribution(idx, userAddress)
         : Promise.resolve(0n);
@@ -133,24 +235,28 @@ export function ChallengeDetail() {
         ? backendApi.getAuthStatus(userAddress).catch(() => null)
         : Promise.resolve(null);
 
-      const progressPromise = backendApi.getProgress(idx).catch(() => ({ challengeIdx: idx, progress: 0, claimed: false }));
+      const progressPromise = backendApi.getProgress(idx).catch(() => ({
+        challengeIdx: idx,
+        progress: 0,
+        claimed: false,
+      }));
 
-      const [creatorStake, currentUserStake, auth, prog] = await Promise.all([
+      const [creatorStake, currentUserStake, auth, progressData] = await Promise.all([
         creatorContributionPromise,
         userContributionPromise,
         authStatusPromise,
         progressPromise,
       ]);
 
-      storeChallenge({ ...c, index: idx }, prog.progress, prog.claimed);
-      setCheckpointMap(buildClaimedMap(c));
+      storeChallenge({ ...nextChallenge, index: idx }, progressData.progress, progressData.claimed);
+      setCheckpointMap(buildClaimedMap(nextChallenge));
       setCreatorContribution(creatorStake);
       setUserContribution(userAddress ? currentUserStake : null);
-      setBackendProgress(prog.progress);
-      setBackendClaimed(prog.claimed);
+      setBackendProgress(progressData.progress);
+      setBackendClaimed(progressData.claimed);
       setAuthStatus(auth);
-    } catch (e: any) {
-      setError(e.message);
+    } catch (loadError: any) {
+      setError(loadError.message);
     } finally {
       if (showBlockingLoader) {
         setLoading(false);
@@ -158,10 +264,34 @@ export function ChallengeDetail() {
     }
   }
 
+  async function handleVerify() {
+    if (!challenge) return;
+
+    const { app, action, count } = parseChallengeId(challenge.challengeId);
+    setVerifying(true);
+    setVerification(null);
+    setError("");
+
+    try {
+      const result = await backendApi.check({
+        app,
+        action,
+        count,
+        duolingoUsername: duolingoInput || undefined,
+      });
+      setVerification(result);
+    } catch (verifyError: any) {
+      setError(verifyError.message);
+    } finally {
+      setVerifying(false);
+    }
+  }
+
   async function handleClaim() {
     if (!challenge || !userAddress) return;
 
     setClaiming(true);
+
     try {
       const proof = await backendApi.signProof({
         challengeIdx: idx,
@@ -175,6 +305,7 @@ export function ChallengeDetail() {
       }
 
       const body = buildClaimAllBody(idx, proof.earnedCount, proof.signature);
+      const boc = body.toBoc().toString("base64");
 
       await tonConnectUI.sendTransaction({
         validUntil: Math.floor(Date.now() / 1000) + 600,
@@ -187,10 +318,10 @@ export function ChallengeDetail() {
         ],
       });
 
-      await loadChallenge({ forceRefresh: true });
-    } catch (e: any) {
-      if (!e.message?.includes("Cancelled") && !e.message?.includes("canceled")) {
-        alert(e.message || "Claim failed.");
+      await loadChallenge({ forceRefresh: true, showBlockingLoader: false });
+    } catch (claimError: any) {
+      if (!claimError.message?.includes("Cancelled") && !claimError.message?.includes("canceled")) {
+        alert(claimError.message || "Claim failed.");
       }
     } finally {
       setClaiming(false);
@@ -199,9 +330,12 @@ export function ChallengeDetail() {
 
   async function handleRefund() {
     if (!challenge) return;
+
     setRefunding(true);
+
     try {
       const body = buildRefundUnclaimedBody(idx);
+
       await tonConnectUI.sendTransaction({
         validUntil: Math.floor(Date.now() / 1000) + 600,
         messages: [
@@ -212,10 +346,11 @@ export function ChallengeDetail() {
           },
         ],
       });
-      await loadChallenge({ forceRefresh: true });
-    } catch (e: any) {
-      if (!e.message?.includes("Cancelled") && !e.message?.includes("canceled")) {
-        alert(e.message || "Refund failed.");
+
+      await loadChallenge({ forceRefresh: true, showBlockingLoader: false });
+    } catch (refundError: any) {
+      if (!refundError.message?.includes("Cancelled") && !refundError.message?.includes("canceled")) {
+        alert(refundError.message || "Refund failed.");
       }
     } finally {
       setRefunding(false);
@@ -224,12 +359,14 @@ export function ChallengeDetail() {
 
   async function handleConnectApp() {
     if (!userAddress || !challenge) return;
+
     const { app } = parseChallengeId(challenge.challengeId);
     const connectableKey = getConnectableAppKey(app);
 
     if (!connectableKey) return;
 
     setConnecting(true);
+
     try {
       switch (connectableKey) {
         case "github": {
@@ -242,13 +379,14 @@ export function ChallengeDetail() {
             alert("Enter your LeetCode username.");
             return;
           }
+
           await backendApi.connectLeetCode(userAddress, leetcodeInput.trim());
-          await loadChallenge({ forceRefresh: true });
+          await loadChallenge({ forceRefresh: true, showBlockingLoader: false });
           return;
         }
       }
-    } catch (e: any) {
-      alert(e.message || "Connection failed.");
+    } catch (connectError: any) {
+      alert(connectError.message || "Connection failed.");
     } finally {
       setConnecting(false);
     }
@@ -256,6 +394,7 @@ export function ChallengeDetail() {
 
   async function handleAddFunds() {
     if (!challenge) return;
+
     if (!userAddress) {
       await tonConnectUI.openModal();
       return;
@@ -268,6 +407,7 @@ export function ChallengeDetail() {
     }
 
     setFunding(true);
+
     try {
       const body = buildAddFundsBody(idx);
       await tonConnectUI.sendTransaction({
@@ -282,32 +422,55 @@ export function ChallengeDetail() {
       });
 
       setFundAmount("");
-      await loadChallenge({ forceRefresh: true });
-    } catch (e: any) {
-      if (!e.message?.includes("Cancelled") && !e.message?.includes("canceled")) {
-        alert(e.message || "Funding failed.");
+      await loadChallenge({ forceRefresh: true, showBlockingLoader: false });
+    } catch (fundError: any) {
+      if (!fundError.message?.includes("Cancelled") && !fundError.message?.includes("canceled")) {
+        alert(fundError.message || "Funding failed.");
       }
     } finally {
       setFunding(false);
     }
   }
 
-  function renderFallbackState(kind: "loading" | "error" | "empty", title: string, message: string) {
-    const boxClassName =
-      kind === "loading" ? "loading-card" : kind === "error" ? "error-banner" : "empty-state";
+  async function handleRefresh() {
+    setRefreshing(true);
+    try {
+      await loadChallenge({ forceRefresh: true, showBlockingLoader: false });
+    } finally {
+      setRefreshing(false);
+    }
+  }
 
+  function renderFallbackState(kind: "loading" | "error" | "empty", title: string, message: string) {
     return (
-      <div className="page">
-        <button type="button" className="top-link" onClick={() => navigate("/")}>
-          Back to challenges
-        </button>
-        <div className={boxClassName}>
-          <strong>{title}</strong>
-          <p>{message}</p>
-        </div>
-        <button type="button" className="button-secondary button-full" onClick={() => navigate("/")}>
-          Go back
-        </button>
+      <div className="screen">
+        <header className="app-topbar">
+          <div className="app-topbar-inner">
+            <div className="topbar-leading">
+              <button type="button" className="back-control" onClick={() => navigate("/")} aria-label="Back to challenges">
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  arrow_back
+                </span>
+              </button>
+              <div className="back-copy">
+                <div className="brand-title">Challenge Path</div>
+                <div className="brand-subtitle">Loading</div>
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <main className="page-frame">
+          <div className="page-stack">
+            <div className={`state-card ${kind === "error" ? "error" : kind === "loading" ? "loading" : ""}`}>
+              <strong>{title}</strong>
+              <p>{message}</p>
+            </div>
+            <button type="button" className="secondary-button" onClick={() => navigate("/")}>
+              Back to challenges
+            </button>
+          </div>
+        </main>
       </div>
     );
   }
@@ -328,17 +491,20 @@ export function ChallengeDetail() {
   const appLabel = APP_LABELS[appKey as keyof typeof APP_LABELS] ?? appKey;
   const actionLabel = formatActionLabel(action);
   const expired = Date.now() / 1000 > challenge.endDate;
-  const fullyCompleted = backendProgress >= challenge.totalCheckpoints;
-  const isOpen = !backendClaimed && !fullyCompleted && !expired;
-  const progressPct = Math.min(100, Math.round((backendProgress / challenge.totalCheckpoints) * 100));
-  const status = backendClaimed
-    ? "completed"
-    : fullyCompleted
-      ? "claimable"
-      : expired
-        ? "expired"
-        : "active";
-  const nextCheckpoint = checkpointMap.findIndex((claimed) => !claimed);
+  const earnedCount = Math.min(backendProgress, challenge.totalCheckpoints);
+  const fullyReleased = backendClaimed || challenge.claimedCount >= challenge.totalCheckpoints;
+  const routeFullyMatched = earnedCount >= challenge.totalCheckpoints;
+  const isOpen = !fullyReleased && !routeFullyMatched && !expired;
+  const progressPct = Math.min(100, Math.round((earnedCount / challenge.totalCheckpoints) * 100));
+  const statusKey = fullyReleased ? "completed" : routeFullyMatched ? "ready" : expired ? "expired" : "active";
+  const statusLabel =
+    statusKey === "completed"
+      ? "Completed"
+      : statusKey === "ready"
+        ? "Ready"
+        : statusKey === "expired"
+          ? "Expired"
+          : "Active";
   const hasAdditionalBackers = creatorContribution !== null && creatorContribution < challenge.totalDeposit;
   const showUserContribution = userContribution !== null && userContribution > 0n;
   const normalizedUserAddress = userAddress ? normalizeAddress(userAddress) : "";
@@ -350,309 +516,374 @@ export function ChallengeDetail() {
   const connectedUsername = appConnection?.username;
   const showConnectPrompt = isBeneficiary && isOpen && connectableKey !== null && !appConnected;
   const showConnectedState = isBeneficiary && isOpen && connectableKey !== null && appConnected;
-  const showEndedWarning = isBeneficiary && !isOpen && expired && !fullyCompleted && connectableKey !== null && !appConnected;
-  const needsUsernameInput = connectableKey === "leetcode";
-  const canClaimRewards = isBeneficiary && !backendClaimed && (expired || fullyCompleted);
+  const showEndedWarning = isBeneficiary && !isOpen && expired && !routeFullyMatched && connectableKey !== null && !appConnected;
+  const needsUsernameInput = connectableKey === "leetcode" && !appConnected;
+  const canClaimRewards = isBeneficiary && !fullyReleased && (expired || routeFullyMatched);
   const showManualVerificationInput = canClaimRewards && appKey === "DUOLINGO";
+  const nextCheckpoint = earnedCount < challenge.totalCheckpoints ? earnedCount + 1 : challenge.totalCheckpoints;
+  const nextUnlockLabel = fullyReleased
+    ? "All slices released"
+    : routeFullyMatched
+      ? `${formatTonAmount(challenge.totalDeposit)} TON ready`
+      : `Step ${nextCheckpoint} · ${formatTonAmount(challenge.amountPerCheckpoint)} TON`;
+
+  let nextTitle = "Checkpoint in motion";
+  let nextCopy = `Checkpoint ${nextCheckpoint} releases ${formatTonAmount(challenge.amountPerCheckpoint)} TON.`;
+
+  if (showConnectPrompt) {
+    nextTitle = `Connect ${appLabel}`;
+    nextCopy = `Link the beneficiary ${appLabel} account so this path can track live activity and unlock reward slices.`;
+  } else if (canClaimRewards) {
+    nextTitle = "Claim earned TON";
+    nextCopy = expired
+      ? "The path has ended. Claim every earned checkpoint in one transaction."
+      : "All checkpoints are matched. Claim the full unlocked reward now.";
+  } else if (showEndedWarning) {
+    nextTitle = `${appLabel} was never linked`;
+    nextCopy = "No verified activity was recorded while the path was live.";
+  } else if (showConnectedState) {
+    nextTitle = "Tracking live";
+    nextCopy = `Keep shipping on ${appLabel}. The next verified ${actionLabel.toLowerCase()} unlocks the next slice.`;
+  } else if (!isBeneficiary && isOpen) {
+    nextTitle = "Path is live";
+    nextCopy = `The beneficiary is working toward checkpoint ${nextCheckpoint}.`;
+  } else if (expired) {
+    nextTitle = "Path closed";
+    nextCopy = "The deadline has passed. Remaining value stays locked until the valid closing action is taken.";
+  }
 
   return (
-    <div className="page">
-      <button type="button" className="top-link" onClick={() => navigate("/")}>
-        Back to challenges
-      </button>
+    <div className="screen">
+      <header className="app-topbar">
+        <div className="app-topbar-inner">
+          <div className="topbar-leading">
+            <button type="button" className="back-control" onClick={() => navigate("/")} aria-label="Back to challenges">
+              <span className="material-symbols-outlined" aria-hidden="true">
+                arrow_back
+              </span>
+            </button>
+            <div className="back-copy">
+              <div className="brand-title">Challenge Path</div>
+              <div className="brand-subtitle">#{idx}</div>
+            </div>
+          </div>
 
-      <header className="surface surface-accent hero-panel detail-header detail-hero">
-        <div className="eyebrow">On-chain challenge #{idx}</div>
-        <div className="detail-title-row">
-          <div>
-            <h1 className="detail-title">{appLabel} / {actionLabel}</h1>
-            <p className="detail-subcopy">
-              Escrow #{idx} releases funds one checkpoint at a time. Claims require backend verification and a contract-valid proof.
-            </p>
+          <div className="topbar-meta">
+            <div className="signal-stack" aria-hidden="true">
+              <div className={`signal ${userAddress ? "is-on" : ""}`}>
+                <span className="signal-dot" />
+                <span>{userAddress ? "Wallet active" : "Wallet idle"}</span>
+              </div>
+              <div className={`signal ${appConnected ? "is-on" : ""}`}>
+                <span className="signal-dot" />
+                <span>{appConnected ? `${appLabel} synced` : connectableKey ? `Connect ${appLabel}` : appLabel}</span>
+              </div>
+            </div>
+
+            <button type="button" className="wallet-control" onClick={() => void tonConnectUI.openModal()}>
+              {userAddress ? formatWalletPreview(userAddress) : "Connect"}
+            </button>
           </div>
-          <div className="pill-cluster">
-            <span className={`status-pill status-${status}`}>{status}</span>
-            {challenge.unlisted && <span className="status-pill status-unlisted">Unlisted</span>}
-          </div>
-        </div>
-        <div className="info-chip-row">
-          <span className="inline-note">{new Date(challenge.endDate * 1000).toLocaleDateString()}</span>
         </div>
       </header>
 
-      <section className="stats-grid">
-        <div className="stat-tile surface">
-          <span className="stat-label">Progress</span>
-          <div className="stat-value">{backendProgress} / {challenge.totalCheckpoints}</div>
-          <p className="section-note">{progressPct}% of checkpoints unlocked</p>
-        </div>
-        <div className="stat-tile surface">
-          <span className="stat-label">Escrow pool</span>
-          <div className="stat-value">{(Number(challenge.totalDeposit) / 1e9).toFixed(2)} TON</div>
-          <p className="section-note">Total value currently held by the contract.</p>
-        </div>
-        <div className="stat-tile surface">
-          <span className="stat-label">Per checkpoint</span>
-          <div className="stat-value">{(Number(challenge.amountPerCheckpoint) / 1e9).toFixed(4)} TON</div>
-          <p className="section-note">
-            {nextCheckpoint === -1 ? "All checkpoints already claimed." : `Next unlock is checkpoint ${nextCheckpoint + 1}.`}
-          </p>
-        </div>
-        <div className="stat-tile surface">
-          <span className="stat-label">Closing time</span>
-          <div className="stat-value">{new Date(challenge.endDate * 1000).toLocaleDateString()}</div>
-          <p className="section-note">{expired ? "Past deadline. Refund path may be available." : "Claims remain open until the deadline."}</p>
-        </div>
-        {showUserContribution && (
-          <div className="stat-tile surface">
-            <span className="stat-label">Your stake</span>
-            <div className="stat-value">{(Number(userContribution) / 1e9).toFixed(2)} TON</div>
-            <p className="section-note">Your total contribution to this escrow.</p>
-          </div>
-        )}
-      </section>
-
-      {showConnectPrompt && (
-        <section className="surface surface-accent section-panel action-panel">
-          <div className="section-header">
-            <div>
-              <h2 className="section-title">Connect {appLabel}</h2>
-              <p className="section-note">
-                Link your {appLabel} account so your activity is tracked automatically.
-                Without this, the challenge cannot verify your progress.
-              </p>
+      <main className="page-frame">
+        <div className="page-stack">
+          <section className="panel panel-accent challenge-hero">
+            <div className="challenge-chip-row">
+              <div className="eyebrow">Challenge #{idx}</div>
+              <div className="section-meta">
+                <span className={`state-pill is-${statusKey}`}>{statusLabel}</span>
+                <span className="mini-tag">{appLabel}</span>
+                {challenge.unlisted && <span className="state-pill is-unlisted">Unlisted</span>}
+              </div>
             </div>
-          </div>
-          {needsUsernameInput && (
-            <input
-              className="form-input"
-              placeholder={`Your ${appLabel} username`}
-              value={leetcodeInput}
-              onChange={(e) => setLeetcodeInput(e.target.value)}
-              style={{ marginBottom: "0.75rem" }}
-            />
-          )}
-          <button className="button-primary button-full" onClick={handleConnectApp} disabled={connecting}>
-            {connecting ? "Connecting..." : `Connect ${appLabel}`}
-          </button>
-        </section>
-      )}
 
-      {showConnectedState && (
-        <section className="surface section-panel app-status-panel">
-          <div className="section-header">
-            <div>
-              <h2 className="section-title">{appLabel} connected</h2>
-              <p className="section-note app-status-copy">
-                {connectedUsername
-                  ? <>Logged in as <strong>@{connectedUsername}</strong>. Your daily {actionLabel.toLowerCase()} activity is being tracked automatically.</>
-                  : <>Your {appLabel} account is connected. Daily {actionLabel.toLowerCase()} activity is being tracked automatically.</>}
-              </p>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {showEndedWarning && (
-        <section className="surface section-panel app-status-panel">
-          <div className="section-header">
-            <div>
-              <h2 className="section-title">{appLabel} not connected</h2>
-              <p className="section-note app-status-copy app-status-warning">
-                Your {appLabel} account was not linked during this challenge. No progress was tracked.
-                Connect now if you believe this is an error, then contact the sponsor.
-              </p>
-            </div>
-          </div>
-        </section>
-      )}
-
-      {showManualVerificationInput && (
-        <section className="surface section-panel action-panel">
-          <div className="section-header">
-            <div>
-              <h2 className="section-title">Verification input</h2>
-              <p className="section-note">Enter your Duolingo username to verify your progress.</p>
-            </div>
-          </div>
-          <input
-            className="form-input"
-            placeholder="Your Duolingo username"
-            value={duolingoInput}
-            onChange={(e) => setDuolingoInput(e.target.value)}
-          />
-        </section>
-      )}
-
-      {isOpen && (
-        <section className="surface section-panel action-panel">
-          <div className="section-header">
-            <div>
-              <h2 className="section-title">Back this challenge</h2>
-              <p className="section-note">Anyone can add TON to increase the reward pool. 0.01 TON stays reserved for gas.</p>
-            </div>
-          </div>
-          <div className="split-grid">
-            <div className="form-group">
-              <label className="form-label">Amount (TON)</label>
-              <input
-                className="form-input"
-                type="number"
-                step="0.01"
-                min="0.02"
-                placeholder="0.50"
-                value={fundAmount}
-                onChange={(e) => setFundAmount(e.target.value)}
-              />
-            </div>
-            <button className="button-primary button-full" onClick={handleAddFunds} disabled={funding}>
-              {!userAddress ? "Connect wallet to add funds" : funding ? "Adding funds..." : "Add funds"}
-            </button>
-          </div>
-        </section>
-      )}
-
-      <section className="surface section-panel checkpoint-section">
-        <div className="section-header">
-          <div>
-            <h2 className="section-title">Checkpoint board</h2>
-            <p className="section-note">Each green tile is already unlocked and claimed.</p>
-          </div>
-          <span className="inline-note">{progressPct}%</span>
-        </div>
-        <div className="progress-track">
-          <div className="progress-fill" style={{ width: `${progressPct}%` }} />
-        </div>
-        <div className="checkpoint-grid">
-          {checkpointMap.map((claimed, i) => (
-            <div key={i} className={`checkpoint-pill ${claimed ? "is-claimed" : ""}`}>
-              {i + 1}
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="identity-grid">
-        <div className="surface section-panel detail-side-panel">
-          <h2 className="section-title detail-side-title">Participants</h2>
-          {hasAdditionalBackers && (
-            <p className="section-note detail-side-note">
-              This challenge has additional backers beyond the original creator.
-            </p>
-          )}
-          <div className="detail-stack">
-            <div className="identity-row">
+            <div className="source-card-main" style={{ marginTop: "0.8rem" }}>
+              <span className={`vault-icon ${appKey === "LEETCODE" ? "is-leetcode" : "is-github"}`}>
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  {getActionIcon(appKey, action)}
+                </span>
+              </span>
               <div>
-                <div className="identity-role">Creator</div>
-                <div className="identity-address">{formatWalletPreview(challenge.sponsor)}</div>
-                {creatorContribution !== null && (
-                  <div className="identity-note">
-                    Contributed {(Number(creatorContribution) / 1e9).toFixed(2)} TON
+                <h1 className="challenge-title">{actionLabel}</h1>
+                <p className="support-copy tight">{appLabel} reward route</p>
+              </div>
+            </div>
+
+            <div className="metric-grid">
+              <div className="metric-card">
+                <span className="metric-label">Locked reward</span>
+                <span className="metric-value">{formatTonAmount(challenge.totalDeposit)} TON</span>
+                <span className="metric-support">{challenge.totalCheckpoints} slices in escrow</span>
+              </div>
+
+              <div className="metric-card">
+                <span className="metric-label">Progress</span>
+                <span className="metric-value">
+                  {earnedCount} / {challenge.totalCheckpoints}
+                </span>
+                <span className="metric-support">{progressPct}% matched</span>
+              </div>
+
+              <div className="metric-card">
+                <span className="metric-label">Next unlock</span>
+                <span className="metric-value">{nextUnlockLabel}</span>
+                <span className="metric-support">
+                  {fullyReleased ? "Route closed" : `Checkpoint ${nextCheckpoint}`}
+                </span>
+              </div>
+
+              <div className="metric-card">
+                <span className="metric-label">Deadline</span>
+                <span className="metric-value">{formatShortDate(challenge.endDate)}</span>
+                <span className="metric-support">{formatRelativeDeadline(challenge.endDate)}</span>
+              </div>
+            </div>
+          </section>
+
+          <section className="panel route-panel">
+            <div className="route-head">
+              <div>
+                <div className="section-kicker">Reward path</div>
+                <h2 className="section-title">Checkpoint route</h2>
+              </div>
+              <div className="section-meta">
+                <span className="mini-tag">{progressPct}% matched</span>
+              </div>
+            </div>
+
+            <div className="route-list">
+              {checkpointMap.map((_, index) => {
+                const routeState = getRouteState({
+                  index,
+                  challenge,
+                  earnedCount,
+                  fullyReleased,
+                });
+
+                return (
+                  <div key={index} className={`route-item is-${routeState}`}>
+                    <span className="route-bullet" aria-hidden="true">
+                      <span className="material-symbols-outlined">
+                        {routeState === "claimed"
+                          ? "check"
+                          : routeState === "ready"
+                            ? "lock_open"
+                            : routeState === "current"
+                              ? "play_arrow"
+                              : "lock"}
+                      </span>
+                    </span>
+
+                    <div className="route-card">
+                      <div className="route-top">
+                        <span className="route-step-label">Checkpoint {index + 1}</span>
+                        <span className="route-step-state">
+                          {getRouteStateLabel(routeState, canClaimRewards)}
+                        </span>
+                      </div>
+                      <h3 className="route-step-title">
+                        {formatTonAmount(challenge.amountPerCheckpoint)} TON
+                      </h3>
+                      <p className="route-step-copy">
+                        {getRouteCopy(routeState, actionLabel, canClaimRewards)}
+                      </p>
+                      <div className="route-step-reward">
+                        <span>{routeState === "current" ? "Next slice" : "Reward slice"}</span>
+                        <strong>{actionLabel}</strong>
+                      </div>
+                    </div>
                   </div>
-                )}
-              </div>
-              {isSponsor && <span className="inline-note">You</span>}
+                );
+              })}
             </div>
-            <div className="identity-row">
+          </section>
+
+          <section className={`panel ${showConnectPrompt || canClaimRewards ? "panel-accent" : "panel-soft"} next-panel`}>
+            <div className="section-kicker">Next move</div>
+            <h2 className="section-title">{nextTitle}</h2>
+            <div className="next-copy">
+              <p className="support-copy tight">{nextCopy}</p>
+              {showConnectedState && connectedUsername && (
+                <div className="connection-note">
+                  Synced as {connectableKey === "github" ? `@${connectedUsername}` : connectedUsername}
+                </div>
+              )}
+            </div>
+
+            {showConnectPrompt && needsUsernameInput && (
+              <input
+                className="inline-input"
+                placeholder={`Your ${appLabel} username`}
+                value={leetcodeInput}
+                onChange={(event) => setLeetcodeInput(event.target.value)}
+              />
+            )}
+
+            {showManualVerificationInput && (
+              <input
+                className="inline-input"
+                placeholder="Your Duolingo username"
+                value={duolingoInput}
+                onChange={(event) => setDuolingoInput(event.target.value)}
+              />
+            )}
+
+            <div className="next-actions">
+              {showConnectPrompt && (
+                <button className="primary-button" onClick={handleConnectApp} disabled={connecting}>
+                  {connecting ? `Connecting ${appLabel}...` : `Connect ${appLabel}`}
+                </button>
+              )}
+
+              {canClaimRewards && (
+                <>
+                  <button className="primary-button" onClick={handleClaim} disabled={claiming}>
+                    {claiming ? "Claiming..." : "Claim earned TON"}
+                  </button>
+                  <button className="secondary-button" onClick={handleVerify} disabled={verifying}>
+                    {verifying ? "Checking..." : "Check proof"}
+                  </button>
+                </>
+              )}
+
+              {!showConnectPrompt && !canClaimRewards && (
+                <button className="ghost-button" onClick={handleRefresh} disabled={refreshing}>
+                  {refreshing ? "Refreshing..." : "Refresh route"}
+                </button>
+              )}
+            </div>
+          </section>
+
+          {(isOpen || (expired && !fullyReleased && isSponsor)) && (
+            <section className="panel panel-soft actions-panel">
+              <div className="section-heading">
+                <div>
+                  <div className="section-kicker">Contract actions</div>
+                  <h2 className="section-title">Pool controls</h2>
+                </div>
+              </div>
+
+              {isOpen && (
+                <div className="actions-grid">
+                  <input
+                    className="inline-input"
+                    type="number"
+                    step="0.01"
+                    min="0.02"
+                    placeholder="0.50 TON"
+                    value={fundAmount}
+                    onChange={(event) => setFundAmount(event.target.value)}
+                  />
+                  <button className="secondary-button" onClick={handleAddFunds} disabled={funding}>
+                    {!userAddress ? "Connect wallet" : funding ? "Adding funds..." : "Add funds"}
+                  </button>
+                </div>
+              )}
+
+              {expired && !fullyReleased && isSponsor && (
+                <div className="next-actions" style={{ marginTop: isOpen ? "0.85rem" : "0" }}>
+                  <button className="ghost-button" onClick={handleRefund} disabled={refunding}>
+                    {refunding ? "Refunding..." : "Refund unclaimed balance"}
+                  </button>
+                </div>
+              )}
+            </section>
+          )}
+
+          <section className="panel section-shell">
+            <div className="section-heading">
               <div>
-                <div className="identity-role">Beneficiary</div>
-                <div className="identity-address">{formatWalletPreview(challenge.beneficiary)}</div>
+                <div className="section-kicker">Context</div>
+                <h2 className="section-title">People and terms</h2>
               </div>
-              {isBeneficiary && <span className="inline-note">You</span>}
             </div>
-          </div>
-        </div>
-        <div className="surface section-panel detail-side-panel">
-          <h2 className="section-title detail-side-title">Action context</h2>
-          <div className="summary-list">
-            <div className="summary-row">
-              <span className="summary-label">App</span>
-              <span className="summary-value">{appLabel}</span>
-            </div>
-            <div className="summary-row">
-              <span className="summary-label">Action</span>
-              <span className="summary-value">{actionLabel}</span>
-            </div>
-            <div className="summary-row">
-              <span className="summary-label">Claim status</span>
-              <span className="summary-value">{isOpen ? "Open" : "Closed"}</span>
-            </div>
-            <div className="summary-row">
-              <span className="summary-label">Wallet state</span>
-              <span className="summary-value">{userAddress ? "Connected" : "Connect a wallet to act"}</span>
-            </div>
-          </div>
-        </div>
-      </section>
- 
-      {canClaimRewards && (
-        <section className="surface surface-accent section-panel action-panel">
-          <div className="section-header">
-            <div>
-              <h2 className="section-title">Claim your rewards</h2>
-              <p className="section-note">
-                {expired
-                  ? "The challenge has ended. Verify your progress and claim all earned checkpoints in one transaction."
-                  : "All checkpoints are complete. You can verify and claim the full reward now without waiting for the deadline."}
+
+            {hasAdditionalBackers && (
+              <p className="support-copy tight" style={{ marginBottom: "0.85rem" }}>
+                This pool has additional backers beyond the original creator.
               </p>
-            </div>
-          </div>
-          <div className="button-row">
-            <button className="button-primary" onClick={handleClaim} disabled={claiming}>
-              {claiming ? "Claiming..." : "Claim earned checkpoints"}
-            </button>
-          </div>
-        </section>
-      )}
+            )}
 
-      {expired && !backendClaimed && isSponsor && (
-        <section className="surface section-panel action-panel">
-          <div className="section-header">
-            <div>
-              <h2 className="section-title">Sponsor refund</h2>
-              <p className="section-note">After the deadline, any remaining value can be returned to the sponsor.</p>
-            </div>
-          </div>
-          <button className="button-ghost button-full" onClick={handleRefund} disabled={refunding}>
-            {refunding ? "Refunding..." : "Refund unclaimed balance"}
-          </button>
-        </section>
-      )}
+            <div className="context-grid">
+              <div className="context-card">
+                <span className="context-key">Sponsor</span>
+                <div className="context-value">{formatWalletPreview(challenge.sponsor)}</div>
+                <div className="context-meta">
+                  {creatorContribution !== null
+                    ? `Funded ${formatTonAmount(creatorContribution)} TON${isSponsor ? " • You" : ""}`
+                    : isSponsor
+                      ? "You"
+                      : "Creator wallet"}
+                </div>
+              </div>
 
-      {verification && (
-        <section className="surface section-panel">
-          <div className="section-header">
-            <div>
-              <h2 className="section-title">Verification result</h2>
-              <p className="section-note">Backend readout for the current verification request.</p>
-            </div>
-            <span className={`verification-badge ${verification.verified ? "is-verified" : "is-pending"}`}>
-              {verification.verified ? "Verified" : "Not yet"}
-            </span>
-          </div>
-          <div className="summary-list">
-            <div className="summary-row">
-              <span className="summary-label">Progress</span>
-              <span className="summary-value">{verification.currentCount} / {verification.targetCount}</span>
-            </div>
-            <div className="summary-row">
-              <span className="summary-label">Details</span>
-              <span className="summary-value">{verification.message}</span>
-            </div>
-          </div>
-        </section>
-      )}
+              <div className="context-card">
+                <span className="context-key">Beneficiary</span>
+                <div className="context-value">{formatWalletPreview(challenge.beneficiary)}</div>
+                <div className="context-meta">{isBeneficiary ? "You" : "Reward recipient"}</div>
+              </div>
 
-      {error && (
-        <div className="error-banner">
-          <strong>Action failed</strong>
-          <p>{error}</p>
+              <div className="context-card">
+                <span className="context-key">Challenge terms</span>
+                <div className="context-value">{appLabel}</div>
+                <div className="context-meta">
+                  {actionLabel} • {challenge.unlisted ? "Unlisted" : "Public"}
+                </div>
+              </div>
+
+              <div className="context-card">
+                <span className="context-key">Deadline</span>
+                <div className="context-value">{formatShortDate(challenge.endDate)}</div>
+                <div className="context-meta">{formatRelativeDeadline(challenge.endDate)}</div>
+              </div>
+
+              {showUserContribution && (
+                <div className="context-card">
+                  <span className="context-key">Your stake</span>
+                  <div className="context-value">{formatTonAmount(userContribution || 0n)} TON</div>
+                  <div className="context-meta">Total contributed by your wallet</div>
+                </div>
+              )}
+            </div>
+          </section>
+
+          {verification && (
+            <section className="panel verification-card">
+              <div className="verification-head">
+                <div>
+                  <div className="section-kicker">Verification</div>
+                  <h2 className="section-title">Latest proof check</h2>
+                </div>
+                <span className={`state-pill ${verification.verified ? "is-ready" : "is-active"}`}>
+                  {verification.verified ? "Verified" : "Pending"}
+                </span>
+              </div>
+
+              <div className="verification-grid">
+                <div className="verification-row">
+                  <span>Progress</span>
+                  <strong>
+                    {verification.currentCount} / {verification.targetCount}
+                  </strong>
+                </div>
+                <div className="verification-row">
+                  <span>Message</span>
+                  <strong>{verification.message}</strong>
+                </div>
+              </div>
+            </section>
+          )}
+
+          {error && (
+            <div className="state-card error">
+              <strong>Action failed</strong>
+              <p>{error}</p>
+            </div>
+          )}
         </div>
-      )}
-
-      <button type="button" className="button-secondary button-full" onClick={() => navigate("/")}>
-        Back
-      </button>
+      </main>
     </div>
   );
 }

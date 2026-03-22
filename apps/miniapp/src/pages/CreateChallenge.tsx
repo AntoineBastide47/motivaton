@@ -1,17 +1,10 @@
-import { useState, useMemo } from "react";
-
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useTonConnectUI, useTonAddress } from "@tonconnect/ui-react";
+import { useTonAddress, useTonConnectUI } from "@tonconnect/ui-react";
+import { App, APP_ACTIONS, APP_LABELS, type AppAction, buildChallengeId } from "../types/challenge";
 import {
-  App,
-  APP_ACTIONS,
-  APP_LABELS,
-  type AppAction,
-  buildChallengeId,
-} from "../types/challenge";
-import {
-  buildCreateChallengeBody,
   CONTRACT_ADDRESS,
+  buildCreateChallengeBody,
   getAllChallenges,
   normalizeAddress,
   toNano,
@@ -19,7 +12,19 @@ import {
 import { useChallengeCache } from "../challenge-cache";
 
 function formatWalletPreview(address: string) {
-  return `${address.slice(0, 6)}...${address.slice(-4)}`;
+  if (address.length <= 12) return address;
+  return `${address.slice(0, 4)}...${address.slice(-4)}`;
+}
+
+function formatTonAmount(value: number) {
+  if (!Number.isFinite(value) || value <= 0) return "--";
+  if (value >= 100) return value.toFixed(0);
+  if (value >= 10) return value.toFixed(1).replace(/\.0$/, "");
+  return value.toFixed(2).replace(/\.00$/, "");
+}
+
+function getAppIcon(app: App) {
+  return app === App.LeetCode ? "code_blocks" : "terminal";
 }
 
 export function CreateChallenge() {
@@ -39,6 +44,13 @@ export function CreateChallenge() {
   const [submissionStatus, setSubmissionStatus] = useState("");
 
   const actions = useMemo(() => APP_ACTIONS[app], [app]);
+  const challengeId = useMemo(() => buildChallengeId(app, action, count), [app, action, count]);
+  const amountNumber = Number.parseFloat(amount);
+  const rewardPerCheckpoint = Number.isFinite(amountNumber) && count > 0 ? amountNumber / count : 0;
+  const actionLabel = actions.find((entry) => entry.value === action)?.label ?? action;
+  const previewCount = Math.min(count, 6);
+  const overflowCount = Math.max(0, count - previewCount);
+  const minDate = new Date(Date.now() + 86400000).toISOString().split("T")[0];
 
   async function waitForChallengeIndexing(params: {
     sponsor: string;
@@ -64,26 +76,19 @@ export function CreateChallenge() {
       );
 
       if (challenge) return challenge;
-
       await new Promise((resolve) => window.setTimeout(resolve, 2000));
     }
 
     throw new Error("The transaction was submitted, but the challenge is not visible yet. Wait a few seconds and try again.");
   }
 
-  function handleAppChange(newApp: App) {
-    setApp(newApp);
-    setAction(APP_ACTIONS[newApp][0].value);
+  function handleAppChange(nextApp: App) {
+    setApp(nextApp);
+    setAction(APP_ACTIONS[nextApp][0].value);
   }
 
-  const challengeId = useMemo(() => buildChallengeId(app, action, count), [app, action, count]);
-  const amountNumber = Number.parseFloat(amount);
-  const rewardPerCheckpoint = Number.isFinite(amountNumber) && count > 0 ? amountNumber / count : 0;
-
-  const minDate = new Date(Date.now() + 86400000).toISOString().split("T")[0];
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function handleSubmit(event: React.FormEvent) {
+    event.preventDefault();
 
     if (!userAddress) {
       await tonConnectUI.openModal();
@@ -97,17 +102,13 @@ export function CreateChallenge() {
 
     setSubmitting(true);
     setSubmissionStatus("");
+
     try {
       const beneficiary = whoIsPaid || userAddress;
-      const endTimestamp = Math.floor(
-        new Date(`${endDate}T23:59:59`).getTime() / 1000,
-      );
+      const endTimestamp = Math.floor(new Date(`${endDate}T23:59:59`).getTime() / 1000);
       const totalCheckpoints = count;
-
       const body = buildCreateChallengeBody(beneficiary, challengeId, totalCheckpoints, endTimestamp, unlisted);
 
-      // Send transaction via TON Connect
-      console.log("[CreateChallenge] sending to:", CONTRACT_ADDRESS, "amount:", toNano(amount).toString(), "payload:", body.toBoc().toString("base64"));
       setSubmissionStatus("Waiting for wallet confirmation...");
       await tonConnectUI.sendTransaction({
         validUntil: Math.floor(Date.now() / 1000) + 600,
@@ -120,7 +121,7 @@ export function CreateChallenge() {
         ],
       });
 
-      setSubmissionStatus("Waiting for the challenge to be indexed...");
+      setSubmissionStatus("Waiting for the challenge to appear...");
       const indexedChallenge = await waitForChallengeIndexing({
         sponsor: userAddress,
         beneficiary,
@@ -134,11 +135,9 @@ export function CreateChallenge() {
       navigate(`/challenge/${indexedChallenge.index}`, {
         state: { challenge: indexedChallenge },
       });
-    } catch (err: any) {
-      if (err.message?.includes("Cancelled") || err.message?.includes("canceled")) {
-        // User cancelled — do nothing
-      } else {
-        alert(err.message || "Failed to create challenge.");
+    } catch (error: any) {
+      if (!error.message?.includes("Cancelled") && !error.message?.includes("canceled")) {
+        alert(error.message || "Failed to create challenge.");
       }
     } finally {
       setSubmitting(false);
@@ -146,209 +145,305 @@ export function CreateChallenge() {
     }
   }
 
-  const actionLabel = actions.find((a) => a.value === action)?.label ?? action;
-
   return (
-    <div className="page">
-      <button type="button" className="top-link" onClick={() => navigate("/")}>
-        Back to challenges
-      </button>
+    <div className="screen">
+      <header className="app-topbar">
+        <div className="app-topbar-inner">
+          <div className="topbar-leading">
+            <button type="button" className="back-control" onClick={() => navigate("/")} aria-label="Back to challenges">
+              <span className="material-symbols-outlined" aria-hidden="true">
+                arrow_back
+              </span>
+            </button>
+            <div className="back-copy">
+              <div className="brand-title">Build Path</div>
+              <div className="brand-subtitle">Create Challenge</div>
+            </div>
+          </div>
 
-      <header className="surface surface-accent hero-panel create-hero">
-        <div className="eyebrow">New escrow</div>
-        <h1 className="page-title">Define the rule. Lock the stake.</h1>
-        <p className="page-intro">
-          Set the accountability rule, who benefits, and when the escrow closes. The contract holds the deposit until verified checkpoints are claimed.
-        </p>
+          <div className="topbar-meta">
+            <div className="signal-stack" aria-hidden="true">
+              <div className={`signal ${userAddress ? "is-on" : ""}`}>
+                <span className="signal-dot" />
+                <span>{userAddress ? "Wallet active" : "Wallet needed"}</span>
+              </div>
+              <div className="signal is-on">
+                <span className="signal-dot" />
+                <span>{APP_LABELS[app]} path</span>
+              </div>
+            </div>
+
+            <button type="button" className="wallet-control" onClick={() => void tonConnectUI.openModal()}>
+              {userAddress ? formatWalletPreview(userAddress) : "Connect"}
+            </button>
+          </div>
+        </div>
       </header>
 
-      <form onSubmit={handleSubmit} className="form-stack challenge-create-form">
-        <section className="surface section-panel form-section form-section-rule">
-          <div className="section-header">
-            <div>
-              <h2 className="section-title">Challenge rule</h2>
-              <p className="section-note">Choose the app, the tracked action, and how many checkpoints must be unlocked.</p>
-            </div>
-          </div>
-          <div className="section-divider" />
-          <div className="split-grid">
-            <div className="form-group">
-              <label className="form-label">App</label>
-              <select
-                className="form-select"
-                value={app}
-                onChange={(e) => handleAppChange(e.target.value as App)}
-              >
-                {Object.values(App).map((a) => (
-                  <option key={a} value={a}>
-                    {APP_LABELS[a]}
-                  </option>
-                ))}
-              </select>
-            </div>
+      <main className="page-frame page-frame-with-submit">
+        <div className="page-stack">
+          <section className="panel panel-accent builder-intro">
+            <div className="eyebrow">Challenge builder</div>
+            <h1 className="display-title">Build a reward path.</h1>
+            <p className="support-copy">
+              Choose the source, set the checkpoints, lock the TON, and name the beneficiary. The contract holds the stake as soon as you sign.
+            </p>
+          </section>
 
-            <div className="form-group">
-              <label className="form-label">Action</label>
-              <select
-                className="form-select"
-                value={action}
-                onChange={(e) => setAction(e.target.value as AppAction)}
-              >
-                {actions.map((a) => (
-                  <option key={a.value} value={a.value}>
-                    {a.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+          <form onSubmit={handleSubmit} className="builder-form">
+            <section className="builder-step">
+              <span className="builder-marker is-active">1</span>
+              <div className="builder-content panel panel-soft">
+                <div className="builder-label">Source</div>
+                <h3>{APP_LABELS[app]}</h3>
+                <div className="source-card">
+                  <div className="source-card-main">
+                    <span className={`vault-icon ${app === App.LeetCode ? "is-leetcode" : "is-github"}`}>
+                      <span className="material-symbols-outlined" aria-hidden="true">
+                        {getAppIcon(app)}
+                      </span>
+                    </span>
+                    <div>
+                      <div className="vault-title">{APP_LABELS[app]}</div>
+                      <p className="helper-text">
+                        {app === App.LeetCode
+                          ? "Track solved problems and streak-based targets."
+                          : "Track repository activity and GitHub contribution milestones."}
+                      </p>
+                    </div>
+                  </div>
 
-          <div className="form-group form-group-spaced">
-            <label className="form-label">Times to complete</label>
-            <input
-              className="form-input"
-              type="number"
-              min={1}
-              value={count}
-              onChange={(e) => setCount(Math.max(1, parseInt(e.target.value) || 1))}
-            />
-            <p className="field-hint">Each successful claim unlocks one checkpoint from the escrow.</p>
-          </div>
-        </section>
+                  <select
+                    className="source-select"
+                    value={app}
+                    onChange={(event) => handleAppChange(event.target.value as App)}
+                  >
+                    {Object.values(App).map((entry) => (
+                      <option key={entry} value={entry}>
+                        {APP_LABELS[entry]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            </section>
 
-        <section className="surface section-panel form-section form-section-stake">
-          <div className="section-header">
-            <div>
-              <h2 className="section-title">Stake and participants</h2>
-              <p className="section-note">The connected wallet funds the challenge. The beneficiary receives unlocked rewards.</p>
-            </div>
-          </div>
-          <div className="section-divider" />
-          <div className="split-grid">
-            <div className="form-group">
-              <label className="form-label">Amount (TON)</label>
-              <input
-                className="form-input"
-                type="number"
-                step="0.01"
-                min="0.06"
-                placeholder="1.00"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                required
-              />
-              <p className="field-hint">Reserve at least 0.05 TON for gas. The rest is escrowed.</p>
-            </div>
+            <section className="builder-step">
+              <span className="builder-marker">2</span>
+              <div className="builder-content panel panel-soft">
+                <div className="builder-label">Trigger action</div>
+                <h3>{actionLabel}</h3>
+                <div className="action-grid">
+                  {actions.map((entry) => (
+                    <button
+                      key={entry.value}
+                      type="button"
+                      className={`action-pill ${entry.value === action ? "is-active" : ""}`}
+                      onClick={() => setAction(entry.value)}
+                    >
+                      {entry.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </section>
 
-            <div className="form-group">
-              <label className="form-label">Deadline date</label>
-              <input
-                className="form-input"
-                type="date"
-                min={minDate}
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                required
-              />
-            </div>
-          </div>
+            <section className="builder-step">
+              <span className="builder-marker">3</span>
+              <div className="builder-content panel panel-soft">
+                <div className="builder-label">Checkpoint count</div>
+                <h3>{count} unlocks</h3>
+                <div className="quantity-shell">
+                  <input
+                    className="quantity-input"
+                    type="number"
+                    min={1}
+                    value={count}
+                    onChange={(event) => setCount(Math.max(1, Number.parseInt(event.target.value, 10) || 1))}
+                  />
 
-          <div className="form-group form-group-spaced">
-            <label className="form-label">Who gets paid</label>
-            <input
-              className="form-input"
-              type="text"
-              placeholder={userAddress || "Connect wallet first"}
-              value={whoIsPaid}
-              onChange={(e) => setWhoIsPaid(e.target.value)}
-            />
-            <p className="field-hint">Leave empty to pay yourself. Otherwise enter the beneficiary TON address.</p>
-          </div>
+                  <div className="quantity-controls">
+                    <button type="button" className="stepper" onClick={() => setCount((current) => Math.max(1, current - 1))}>
+                      <span className="material-symbols-outlined" aria-hidden="true">
+                        remove
+                      </span>
+                    </button>
+                    <button type="button" className="stepper" onClick={() => setCount((current) => current + 1)}>
+                      <span className="material-symbols-outlined" aria-hidden="true">
+                        add
+                      </span>
+                    </button>
+                  </div>
+                </div>
+                <p className="helper-text">Each completed checkpoint unlocks one slice of the reward path.</p>
+              </div>
+            </section>
 
-          <label className="toggle-row form-group-spaced">
-            <span className="toggle-copy">
-              <span className="toggle-title">Unlisted</span>
-              <span className="toggle-note">Hide this challenge from public browse lists. It will still be accessible via direct link.</span>
-            </span>
-            <span className="toggle-switch">
-              <input
-                type="checkbox"
-                checked={unlisted}
-                onChange={(e) => setUnlisted(e.target.checked)}
-              />
-              <span className="toggle-slider" aria-hidden="true" />
-            </span>
-          </label>
+            <section className="builder-step">
+              <span className="builder-marker">4</span>
+              <div className="builder-content panel panel-soft">
+                <div className="builder-label">Locked reward</div>
+                <h3>{amount ? `${formatTonAmount(amountNumber)} TON` : "Set the total reward"}</h3>
+                <div className="reward-card">
+                  <div className="reward-meta">
+                    <span>Total amount</span>
+                    <span>{rewardPerCheckpoint > 0 ? `${formatTonAmount(rewardPerCheckpoint)} TON / unlock` : "Per unlock pending"}</span>
+                  </div>
+                  <div className="reward-entry">
+                    <input
+                      className="reward-input"
+                      type="number"
+                      step="0.01"
+                      min="0.06"
+                      placeholder="25"
+                      value={amount}
+                      onChange={(event) => setAmount(event.target.value)}
+                      required
+                    />
+                    <span className="reward-badge">TON</span>
+                  </div>
+                  <p className="helper-text">At least 0.05 TON stays reserved for gas. The rest becomes locked reward.</p>
+                </div>
+              </div>
+            </section>
 
-        </section>
+            <section className="builder-step">
+              <span className="builder-marker">5</span>
+              <div className="builder-content panel panel-soft">
+                <div className="builder-label">Deadline and beneficiary</div>
+                <h3>Finish the contract frame</h3>
+                <div className="field-grid">
+                  <div className="field-panel">
+                    <span className="field-label">Deadline</span>
+                    <input
+                      className="field-input"
+                      type="date"
+                      min={minDate}
+                      value={endDate}
+                      onChange={(event) => setEndDate(event.target.value)}
+                      required
+                    />
+                  </div>
 
-        <aside className="surface surface-accent summary-panel challenge-summary-panel">
-          <div className="section-header">
-            <div>
-              <h2 className="section-title">Challenge summary</h2>
-              <p className="section-note">A quick read before you ask the wallet to sign.</p>
-            </div>
-          </div>
-          <div className="summary-list">
-            <div className="summary-row">
-              <span className="summary-label">Goal</span>
-              <span className="summary-value">
-                {count} x {actionLabel} on {APP_LABELS[app]}
-              </span>
-            </div>
-            <div className="summary-row">
-              <span className="summary-label">Total stake</span>
-              <span className="summary-value">{amount || "--"} TON</span>
-            </div>
-            <div className="summary-row">
-              <span className="summary-label">Per checkpoint</span>
-              <span className="summary-value">
-                {rewardPerCheckpoint > 0 ? `${rewardPerCheckpoint.toFixed(3)} TON` : "--"}
-              </span>
-            </div>
-            <div className="summary-row">
-              <span className="summary-label">Deadline</span>
-              <span className="summary-value">
-                {endDate ? new Date(endDate).toLocaleDateString() : "--"}
-              </span>
-            </div>
-            <div className="summary-row">
-              <span className="summary-label">Visibility</span>
-              <span className="summary-value">{unlisted ? "Unlisted" : "Public"}</span>
-            </div>
-            <div className="summary-row">
-              <span className="summary-label">Sponsor</span>
-              <span className="summary-value address-value">
-                {userAddress ? formatWalletPreview(userAddress) : "Not connected"}
-              </span>
-            </div>
-            <div className="summary-row">
-              <span className="summary-label">Beneficiary</span>
-              <span className="summary-value address-value">
-                {whoIsPaid
-                  ? formatWalletPreview(whoIsPaid)
-                  : userAddress
-                    ? formatWalletPreview(userAddress)
-                    : "Not connected"}
-              </span>
-            </div>
-          </div>
-        </aside>
+                  <div className="field-panel">
+                    <span className="field-label">Beneficiary wallet</span>
+                    <input
+                      className="field-input"
+                      type="text"
+                      placeholder={userAddress || "Connect wallet first"}
+                      value={whoIsPaid}
+                      onChange={(event) => setWhoIsPaid(event.target.value)}
+                    />
+                  </div>
+                </div>
+                <p className="helper-text">Leave the beneficiary empty to pay the connected wallet.</p>
+              </div>
+            </section>
 
-        <div className="button-row form-actions">
-          <button type="button" className="button-secondary" onClick={() => navigate("/")}>
-            Back
-          </button>
-          <button type="submit" className="button-primary" disabled={submitting}>
-            {!userAddress ? "Connect wallet" : submitting ? "Creating..." : "Create challenge"}
-          </button>
+            <section className="builder-step">
+              <span className="builder-marker">6</span>
+              <div className="builder-content panel panel-soft">
+                <div className="builder-label">Visibility</div>
+                <h3>{unlisted ? "Unlisted challenge" : "Public challenge"}</h3>
+                <label className={`toggle-card ${unlisted ? "is-on" : ""}`}>
+                  <span>
+                    <span className="toggle-title">Hide from public browse</span>
+                    <span className="toggle-note">The path still works normally, but only direct visitors will see it.</span>
+                  </span>
+                  <span className="toggle-track" aria-hidden="true" />
+                  <input
+                    type="checkbox"
+                    checked={unlisted}
+                    onChange={(event) => setUnlisted(event.target.checked)}
+                  />
+                </label>
+              </div>
+            </section>
+
+            <section className="builder-step">
+              <span className="builder-marker">7</span>
+              <div className="builder-content panel preview-card">
+                <div className="builder-label">Preview</div>
+                <div className="preview-top">
+                  <div className="source-card-main">
+                    <span className={`preview-icon ${app === App.LeetCode ? "is-leetcode" : "is-github"}`}>
+                      <span className="material-symbols-outlined" aria-hidden="true">
+                        {getAppIcon(app)}
+                      </span>
+                    </span>
+                    <div className="preview-title-wrap">
+                      <h3 className="preview-title">{APP_LABELS[app]} reward path</h3>
+                      <div className="preview-status">{unlisted ? "Unlisted" : "Public"}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="preview-path" aria-hidden="true">
+                  {Array.from({ length: previewCount }, (_, index) => (
+                    <span key={index} className={`preview-node ${index === 0 ? "" : "is-faded"}`} />
+                  ))}
+                  {overflowCount > 0 && <span className="preview-overflow">+{overflowCount}</span>}
+                </div>
+
+                <div className="preview-list">
+                  <div className="preview-row">
+                    <span>Goal</span>
+                    <strong>
+                      {count} x {actionLabel}
+                    </strong>
+                  </div>
+                  <div className="preview-row">
+                    <span>Per unlock</span>
+                    <strong>{rewardPerCheckpoint > 0 ? `${formatTonAmount(rewardPerCheckpoint)} TON` : "--"}</strong>
+                  </div>
+                  <div className="preview-row">
+                    <span>Beneficiary</span>
+                    <strong>
+                      {whoIsPaid
+                        ? formatWalletPreview(whoIsPaid)
+                        : userAddress
+                          ? formatWalletPreview(userAddress)
+                          : "Connect wallet"}
+                    </strong>
+                  </div>
+                  <div className="preview-row">
+                    <span>Deadline</span>
+                    <strong>
+                      {endDate
+                        ? new Date(`${endDate}T00:00:00`).toLocaleDateString(undefined, {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                          })
+                        : "Pick a date"}
+                    </strong>
+                  </div>
+                </div>
+              </div>
+            </section>
+
+            <div className="sticky-submit">
+              <div className="sticky-submit-inner">
+                <div className="sticky-submit-copy">
+                  <span className="sticky-submit-label">Locked now</span>
+                  <span className="sticky-submit-value">
+                    {amount ? `${formatTonAmount(amountNumber)} TON` : "--"}
+                  </span>
+                  <span className="sticky-submit-note">
+                    {count} checkpoints{rewardPerCheckpoint > 0 ? ` • ${formatTonAmount(rewardPerCheckpoint)} TON each` : ""}
+                  </span>
+                </div>
+
+                <button type="submit" className="primary-button" disabled={submitting}>
+                  {!userAddress ? "Connect wallet" : submitting ? "Creating..." : "Deploy challenge"}
+                </button>
+
+                {submissionStatus && <div className="sticky-submit-status">{submissionStatus}</div>}
+              </div>
+            </div>
+          </form>
         </div>
-        {submissionStatus && (
-          <div className="loading-card status-banner" role="status" aria-live="polite">
-            {submissionStatus}
-          </div>
-        )}
-      </form>
+      </main>
     </div>
   );
 }

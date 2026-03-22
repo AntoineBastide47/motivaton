@@ -1,76 +1,172 @@
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
-import { TonConnectButton, useTonAddress } from "@tonconnect/ui-react";
+import { useTonAddress, useTonConnectUI } from "@tonconnect/ui-react";
 import { normalizeAddress } from "../contract";
 import { useChallengeCache, type IndexedChallenge } from "../challenge-cache";
 import { APP_LABELS, formatActionLabel, parseChallengeId } from "../types/challenge";
 
-function ChallengeCard({ challenge, progress, claimed }: { challenge: IndexedChallenge; progress: number; claimed: boolean }) {
-  const { app: appKey, action, count } = parseChallengeId(challenge.challengeId);
-  const appLabel = APP_LABELS[appKey as keyof typeof APP_LABELS] ?? appKey;
-  const actionLabel = formatActionLabel(action);
-  const progressPct = Math.min(
-    100,
-    Math.round((progress / challenge.totalCheckpoints) * 100),
-  );
-  const expired = Date.now() / 1000 > challenge.endDate;
-  const fullyCompleted = progress >= challenge.totalCheckpoints;
-  const status = claimed
-    ? "completed"
-    : fullyCompleted
-      ? "claimable"
-      : expired
-        ? "expired"
-        : "active";
-  const endsAt = new Date(challenge.endDate * 1000).toLocaleDateString(undefined, {
+function formatTonAmount(value: bigint | number) {
+  const ton = Number(value) / 1e9;
+  if (!Number.isFinite(ton)) return "--";
+  if (ton >= 100) return ton.toFixed(0);
+  if (ton >= 10) return ton.toFixed(1).replace(/\.0$/, "");
+  return ton.toFixed(2).replace(/\.00$/, "");
+}
+
+function formatShortDate(timestamp: number) {
+  return new Date(timestamp * 1000).toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
   });
+}
+
+function formatWalletPreview(address: string) {
+  if (address.length <= 12) return address;
+  return `${address.slice(0, 4)}...${address.slice(-4)}`;
+}
+
+function getActionIcon(appKey: string, action: string) {
+  if (appKey === "LEETCODE") {
+    switch (action) {
+      case "SOLVE_HARD":
+        return "neurology";
+      case "MAINTAIN_STREAK":
+        return "local_fire_department";
+      default:
+        return "code_blocks";
+    }
+  }
+
+  switch (action) {
+    case "MERGE_PR":
+      return "merge";
+    case "CREATE_PR":
+      return "call_split";
+    case "OPEN_ISSUE":
+      return "bug_report";
+    case "REVIEW":
+      return "rate_review";
+    default:
+      return "terminal";
+  }
+}
+
+function getVisibleStepCount(totalCheckpoints: number) {
+  return Math.min(totalCheckpoints, 6);
+}
+
+function ChallengeCard({
+  challenge,
+  progress,
+  claimed,
+}: {
+  challenge: IndexedChallenge;
+  progress: number;
+  claimed: boolean;
+}) {
+  const { app: appKey, action } = parseChallengeId(challenge.challengeId);
+  const appLabel = APP_LABELS[appKey as keyof typeof APP_LABELS] ?? appKey;
+  const actionLabel = formatActionLabel(action);
+  const expired = Date.now() / 1000 > challenge.endDate;
+  const earnedCount = Math.min(progress, challenge.totalCheckpoints);
+  const progressPct = Math.min(100, Math.round((earnedCount / challenge.totalCheckpoints) * 100));
+  const fullyReleased = claimed || challenge.claimedCount >= challenge.totalCheckpoints;
+  const statusKey = fullyReleased
+    ? "completed"
+    : earnedCount >= challenge.totalCheckpoints
+      ? "ready"
+      : expired
+        ? "expired"
+        : "active";
+  const statusLabel =
+    statusKey === "completed"
+      ? "Completed"
+      : statusKey === "ready"
+        ? "Ready"
+        : statusKey === "expired"
+          ? "Expired"
+          : "Active";
+  const nextUnlockLabel = fullyReleased
+    ? "All reward released"
+    : earnedCount >= challenge.totalCheckpoints
+      ? `${formatTonAmount(challenge.amountPerCheckpoint)} TON ready`
+      : `${formatTonAmount(challenge.amountPerCheckpoint)} TON next`;
+  const visibleSteps = getVisibleStepCount(challenge.totalCheckpoints);
+  const hiddenSteps = Math.max(0, challenge.totalCheckpoints - visibleSteps);
 
   return (
-    <Link to={`/challenge/${challenge.index}`} state={{ challenge }} className="challenge-card surface">
-      <div className="challenge-card-top">
-        <div>
-          <div className="challenge-card-app-row">
-            <div className="challenge-card-app">{appLabel}</div>
-            <span className="mini-pill">#{challenge.index}</span>
-            {challenge.unlisted && <span className="mini-pill">Unlisted</span>}
+    <Link to={`/challenge/${challenge.index}`} state={{ challenge }} className="vault-card">
+      <div className="vault-card-head">
+        <div className="vault-header-row">
+          <div className="vault-title-wrap">
+            <div className="vault-label-row">
+              <span className="vault-app-tag">{appLabel}</span>
+              <span className="mini-tag">#{challenge.index}</span>
+              {challenge.unlisted && <span className="mini-tag">Unlisted</span>}
+              <span className={`state-pill is-${statusKey}`}>{statusLabel}</span>
+            </div>
+            <div className="vault-title-row">
+              <span className={`vault-icon ${appKey === "LEETCODE" ? "is-leetcode" : "is-github"}`}>
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  {getActionIcon(appKey, action)}
+                </span>
+              </span>
+              <h3 className="vault-title">{actionLabel}</h3>
+            </div>
           </div>
-          <h3 className="challenge-card-title">{actionLabel}</h3>
+          <div className="vault-money">
+            <span className="vault-money-value">{formatTonAmount(challenge.totalDeposit)} TON</span>
+            <span className="vault-money-label">Locked reward</span>
+          </div>
         </div>
-        <span className={`status-pill status-${status}`}>{status}</span>
       </div>
 
-      <p className="challenge-card-copy">
-        Unlock {count || challenge.totalCheckpoints} checkpoints before {endsAt}. Each verified step releases part of the escrow.
-      </p>
+      <div className="vault-route" aria-hidden="true">
+        {Array.from({ length: visibleSteps }, (_, index) => {
+          const state =
+            index < challenge.claimedCount || fullyReleased
+              ? "claimed"
+              : index < earnedCount
+                ? "ready"
+                : index === earnedCount && earnedCount < challenge.totalCheckpoints
+                  ? "current"
+                  : "locked";
 
-      <div className="challenge-meta">
-        <div className="challenge-meta-item">
-          <span className="challenge-meta-label">Progress</span>
-          <span className="challenge-meta-value">
-            {progress}/{challenge.totalCheckpoints}
+          return (
+            <span key={index} className={`vault-node is-${state}`}>
+              {index + 1}
+            </span>
+          );
+        })}
+        {hiddenSteps > 0 && <span className="vault-node overflow">+{hiddenSteps}</span>}
+      </div>
+
+      <div className="vault-progress-row">
+        <div>
+          <span className="vault-progress-label">Progress</span>
+          <span className="vault-progress-value">
+            {earnedCount} / {challenge.totalCheckpoints} checkpoints
           </span>
         </div>
-        <div className="challenge-meta-item">
-          <span className="challenge-meta-label">Pool</span>
-          <span className="challenge-meta-value">
-            {(Number(challenge.totalDeposit) / 1e9).toFixed(2)} TON
-          </span>
-        </div>
-        <div className="challenge-meta-item">
-          <span className="challenge-meta-label">Ends</span>
-          <span className="challenge-meta-value">{endsAt}</span>
+        <div>
+          <span className="vault-progress-label">Next unlock</span>
+          <span className="vault-next-value">{nextUnlockLabel}</span>
         </div>
       </div>
 
-      <div className="progress-track">
-        <div className="progress-fill" style={{ width: `${progressPct}%` }} />
+      <div className="vault-progress-track" aria-hidden="true">
+        <div className="vault-progress-fill" style={{ width: `${progressPct}%` }} />
       </div>
 
-      <div className="challenge-footer">
-        <span>{progressPct}% unlocked</span>
-        <span className="challenge-link">Open challenge</span>
+      <div className="vault-foot">
+        <div className="vault-foot-item">
+          <span className="vault-foot-label">Per checkpoint</span>
+          <span className="vault-foot-value">{formatTonAmount(challenge.amountPerCheckpoint)} TON</span>
+        </div>
+        <div className="vault-foot-item">
+          <span className="vault-foot-label">Ends</span>
+          <span className="vault-foot-value">{formatShortDate(challenge.endDate)}</span>
+        </div>
       </div>
     </Link>
   );
@@ -78,7 +174,16 @@ function ChallengeCard({ challenge, progress, claimed }: { challenge: IndexedCha
 
 export function Home() {
   const userAddress = useTonAddress();
-  const { challenges, progressMap, claimedMap, loading, error, hasContractAddress, refreshChallenges } = useChallengeCache();
+  const [tonConnectUI] = useTonConnectUI();
+  const {
+    challenges,
+    progressMap,
+    claimedMap,
+    loading,
+    error,
+    hasContractAddress,
+    refreshChallenges,
+  } = useChallengeCache();
 
   const normalizedUserAddress = userAddress ? normalizeAddress(userAddress) : "";
 
@@ -87,171 +192,213 @@ export function Home() {
   }, [refreshChallenges]);
 
   const myChallenges = userAddress
-    ? challenges.filter((c) => {
-        const sponsor = normalizeAddress(c.sponsor);
-        const beneficiary = normalizeAddress(c.beneficiary);
+    ? challenges.filter((challenge) => {
+        const sponsor = normalizeAddress(challenge.sponsor);
+        const beneficiary = normalizeAddress(challenge.beneficiary);
         return sponsor === normalizedUserAddress || beneficiary === normalizedUserAddress;
       })
     : [];
+
   const myChallengeIds = new Set(myChallenges.map((challenge) => challenge.index));
   const browseChallenges = challenges.filter((challenge) => !challenge.unlisted && !myChallengeIds.has(challenge.index));
 
-  useEffect(() => {
-    console.log("[Home] challenge counts", {
-      totalChallenges: challenges.length,
-      userChallenges: myChallenges.length,
-      browseChallenges: browseChallenges.length,
-      userAddress,
-    });
-  }, [browseChallenges.length, challenges.length, myChallenges.length, userAddress]);
-
   return (
-    <div className="page">
-      <header className="surface surface-accent hero-panel home-hero">
-        <div className="eyebrow">TON accountability</div>
-        <div className="hero-row">
-          <div>
-            <h1 className="page-title">Make the promise cost something.</h1>
-          </div>
-          <div className="tonconnect-slot">
-            <TonConnectButton />
-          </div>
-        </div>
-        <div className="button-row hero-actions">
-          <p className="hero-copy">
-            Create small accountability escrows on TON. Sponsors lock the stake, beneficiaries unlock it checkpoint by checkpoint.
-          </p>
-          <Link to="/create" className="button-primary hero-cta">
-            Create challenge
+    <div className="screen">
+      <header className="app-topbar">
+        <div className="app-topbar-inner">
+          <Link to="/" className="brand-lockup" aria-label="Motivaton home">
+            <span className="brand-mark" aria-hidden="true">
+              <span className="material-symbols-outlined">grid_view</span>
+            </span>
+            <div className="brand-copy">
+              <div className="brand-title">MOTIVATON</div>
+              <div className="brand-subtitle">Reward Engine</div>
+            </div>
           </Link>
+
+          <div className="topbar-meta">
+            <div className="signal-stack" aria-hidden="true">
+              <div className={`signal ${userAddress ? "is-on" : ""}`}>
+                <span className="signal-dot" />
+                <span>{userAddress ? "Wallet active" : "Wallet idle"}</span>
+              </div>
+              <div className="signal is-on">
+                <span className="signal-dot" />
+                <span>GitHub + LeetCode</span>
+              </div>
+            </div>
+
+            <button type="button" className="wallet-control" onClick={() => void tonConnectUI.openModal()}>
+              {userAddress ? formatWalletPreview(userAddress) : "Connect"}
+            </button>
+          </div>
         </div>
       </header>
 
-      {!hasContractAddress && (
-        <div className="empty-state">
-          <strong>Contract address missing</strong>
-          <p>Set `VITE_CONTRACT_ADDRESS` to browse and create on-chain challenges from the miniapp.</p>
-        </div>
-      )}
-
-      {error && (
-        <div className="error-banner">
-          <strong>Could not load challenges</strong>
-          <p>{error}</p>
-        </div>
-      )}
-
-      <section className="surface section-panel list-section">
-        <div className="section-header">
-          <div>
-            <div className="section-heading-row">
-              <div className="title-with-pill">
-                <h2 className="section-title">Your challenges</h2>
-                {userAddress && (
-                  <span className="inline-note" title={`${myChallenges.length} challenges`} aria-label={`${myChallenges.length} challenges`}>
-                    {myChallenges.length}
-                  </span>
-                )}
+      <main className="page-frame">
+        <div className="page-stack">
+          <section className="panel panel-accent home-hero">
+            <div className="loop-grid" aria-hidden="true">
+              <div className="loop-card">
+                <span className="material-symbols-outlined">lock</span>
+                <div className="loop-card-title">Lock</div>
+                <div className="loop-card-copy">TON escrow</div>
               </div>
-              <button
-                type="button"
-                className="icon-button"
-                onClick={() => void refreshChallenges()}
-                disabled={loading}
-                aria-label="Refresh your challenges"
-                title="Refresh your challenges"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path
-                    d="M20 12a8 8 0 1 1-2.34-5.66M20 4v6h-6"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
+              <div className="loop-card">
+                <span className="material-symbols-outlined">terminal</span>
+                <div className="loop-card-title">Track</div>
+                <div className="loop-card-copy">Real activity</div>
+              </div>
+              <div className="loop-card">
+                <span className="material-symbols-outlined">currency_exchange</span>
+                <div className="loop-card-title">Claim</div>
+                <div className="loop-card-copy">Reward released</div>
+              </div>
             </div>
-            <p className="section-note">
-              Only challenges where the connected wallet is the sponsor or beneficiary are shown here.
-            </p>
-          </div>
-        </div>
-        <div className="section-divider" />
-        {!userAddress && (
-          <div className="empty-state">
-            <strong>Connect your wallet</strong>
-            <p>Challenge lists are now private to the connected participant view.</p>
-          </div>
-        )}
-        {userAddress && loading && <div className="loading-card">Loading your challenges...</div>}
-        {userAddress && !loading && myChallenges.length === 0 && (
-          <div className="empty-state">
-            <strong>No challenges yet</strong>
-            <p>Create the first one and the list will populate here.</p>
-          </div>
-        )}
-        {userAddress && (
-          <div className="list-stack challenge-list">
-            {myChallenges.map((c) => (
-              <ChallengeCard key={c.index} challenge={c} progress={progressMap[String(c.index)] || 0} claimed={claimedMap[String(c.index)] || false} />
-            ))}
-          </div>
-        )}
-      </section>
 
-      <section className="surface section-panel list-section">
-        <div className="section-header">
-          <div>
-            <div className="section-heading-row">
-              <div className="title-with-pill">
-                <h2 className="section-title">Browse challenges</h2>
-                <span className="inline-note" title={`${browseChallenges.length} public challenges`} aria-label={`${browseChallenges.length} public challenges`}>
-                  {browseChallenges.length}
+            <div className="eyebrow">TON productivity escrow</div>
+            <h1 className="display-title">
+              Productivity is <span className="display-accent">incentivized.</span>
+            </h1>
+            <p className="support-copy">
+              Lock money behind checkpoints. Match the work. Release the reward.
+            </p>
+
+            <div className="hero-toolbar">
+              <Link to="/create" className="primary-button">
+                <span className="material-symbols-outlined" aria-hidden="true">
+                  add_circle
                 </span>
+                <span>Build challenge</span>
+              </Link>
+              <div className="hero-note">
+                Create GitHub or LeetCode reward paths directly from Telegram.
               </div>
-              <button
-                type="button"
-                className="icon-button"
-                onClick={() => void refreshChallenges()}
-                disabled={loading}
-                aria-label="Refresh browse challenges"
-                title="Refresh browse challenges"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path
-                    d="M20 12a8 8 0 1 1-2.34-5.66M20 4v6h-6"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </button>
             </div>
-            <p className="section-note">
-              Public challenges from other users. Unlisted challenges stay out of this section.
-            </p>
-          </div>
+          </section>
+
+          {!hasContractAddress && (
+            <div className="state-card">
+              <strong>Contract missing</strong>
+              <p>Set `VITE_CONTRACT_ADDRESS` before creating or browsing on-chain challenges.</p>
+            </div>
+          )}
+
+          {error && (
+            <div className="state-card error">
+              <strong>Could not load challenges</strong>
+              <p>{error}</p>
+            </div>
+          )}
+
+          <section className="panel section-shell">
+            <div className="section-heading">
+              <div>
+                <div className="section-kicker">Vault</div>
+                <h2 className="section-title">Your challenges</h2>
+              </div>
+              <div className="section-meta">
+                {userAddress && <span className="mini-tag">{myChallenges.length} live</span>}
+                <button
+                  type="button"
+                  className="refresh-button"
+                  onClick={() => void refreshChallenges()}
+                  disabled={loading}
+                  aria-label="Refresh your challenges"
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    refresh
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            {!userAddress && (
+              <div className="state-card">
+                <strong>Connect your wallet</strong>
+                <p>Your private vaults appear here as soon as the participant wallet is connected.</p>
+              </div>
+            )}
+
+            {userAddress && loading && (
+              <div className="state-card loading">
+                <strong>Loading vaults</strong>
+                <p>Fetching your active and completed reward paths.</p>
+              </div>
+            )}
+
+            {userAddress && !loading && myChallenges.length === 0 && (
+              <div className="state-card">
+                <strong>No vaults yet</strong>
+                <p>Your funded or assigned challenges will appear here first.</p>
+              </div>
+            )}
+
+            {userAddress && myChallenges.length > 0 && (
+              <div className="vault-list">
+                {myChallenges.map((challenge) => (
+                  <ChallengeCard
+                    key={challenge.index}
+                    challenge={challenge}
+                    progress={progressMap[String(challenge.index)] || 0}
+                    claimed={claimedMap[String(challenge.index)] || false}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+
+          <section className="panel section-shell">
+            <div className="section-heading">
+              <div>
+                <div className="section-kicker">Discover</div>
+                <h2 className="section-title">Public vaults</h2>
+              </div>
+              <div className="section-meta">
+                <span className="mini-tag">{browseChallenges.length} open</span>
+                <button
+                  type="button"
+                  className="refresh-button"
+                  onClick={() => void refreshChallenges()}
+                  disabled={loading}
+                  aria-label="Refresh public challenges"
+                >
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    refresh
+                  </span>
+                </button>
+              </div>
+            </div>
+
+            {loading && (
+              <div className="state-card loading">
+                <strong>Loading public vaults</strong>
+                <p>Pulling the latest public challenges from chain and backend cache.</p>
+              </div>
+            )}
+
+            {!loading && browseChallenges.length === 0 && (
+              <div className="state-card">
+                <strong>No public vaults yet</strong>
+                <p>When users publish public reward paths, they will land here.</p>
+              </div>
+            )}
+
+            {browseChallenges.length > 0 && (
+              <div className="vault-list">
+                {browseChallenges.map((challenge) => (
+                  <ChallengeCard
+                    key={challenge.index}
+                    challenge={challenge}
+                    progress={progressMap[String(challenge.index)] || 0}
+                    claimed={claimedMap[String(challenge.index)] || false}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
         </div>
-        <div className="section-divider" />
-        {loading && <div className="loading-card">Loading browse challenges...</div>}
-        {!loading && browseChallenges.length === 0 && (
-          <div className="empty-state">
-            <strong>No public challenges yet</strong>
-            <p>When users create public challenges, they will appear here.</p>
-          </div>
-        )}
-        {browseChallenges.length > 0 && (
-          <div className="list-stack challenge-list">
-            {browseChallenges.map((c) => (
-              <ChallengeCard key={c.index} challenge={c} progress={progressMap[String(c.index)] || 0} claimed={claimedMap[String(c.index)] || false} />
-            ))}
-          </div>
-        )}
-      </section>
+      </main>
     </div>
   );
 }
