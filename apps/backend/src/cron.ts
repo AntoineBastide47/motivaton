@@ -59,6 +59,9 @@ async function eventsProgressJob() {
   const now = Date.now() / 1000;
   const activeChallenges = challenges.filter((c) => {
     if (!c.active || c.endDate <= now) return false;
+    // Temporarily skip completion/claim check for OPEN_ISSUE to debug
+    const action = c.challengeId.split(":")[1];
+    if (action === "OPEN_ISSUE") return true;
     if (isChallengeClaimed(c.index)) return false;
     const progress = getChallengeProgress(c.index);
     if (progress >= c.totalCheckpoints) return false;
@@ -101,9 +104,10 @@ async function eventsProgressJob() {
       const pr = pl.pull_request as Record<string, unknown> | undefined;
       console.log(`[cron]   PREvent ${pe.id}: action=${pl.action} merged=${pr?.merged} created_at=${pe.created_at}`);
     }
-    for (const ie of issueEvents.slice(0, 3)) {
+    for (const ie of issueEvents.slice(0, 5)) {
       const pl = ie.payload as Record<string, unknown>;
-      console.log(`[cron]   IssueEvent ${ie.id}: action=${pl.action} created_at=${ie.created_at}`);
+      const issue = pl.issue as Record<string, unknown> | undefined;
+      console.log(`[cron]   IssueEvent ${ie.id}: action=${pl.action} issue_title="${issue?.title}" issue_created_at=${issue?.created_at} event_created_at=${ie.created_at}`);
     }
 
     // Process each challenge for this user

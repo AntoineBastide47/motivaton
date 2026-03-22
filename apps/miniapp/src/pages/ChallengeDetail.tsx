@@ -157,26 +157,6 @@ export function ChallengeDetail() {
     }
   }
 
-  async function handleVerify() {
-    if (!challenge) return;
-    const { app, action, count } = parseChallengeId(challenge.challengeId);
-
-    setVerifying(true);
-    try {
-      const result = await backendApi.check({
-        app,
-        action,
-        count,
-        duolingoUsername: duolingoInput || undefined,
-      });
-      setVerification(result);
-    } catch (e: any) {
-      setError(e.message);
-    } finally {
-      setVerifying(false);
-    }
-  }
-
   async function handleClaim() {
     if (!challenge || !userAddress) return;
 
@@ -614,9 +594,6 @@ export function ChallengeDetail() {
             </div>
           </div>
           <div className="button-row">
-            <button className="button-secondary" onClick={handleVerify} disabled={verifying}>
-              {verifying ? "Checking..." : "Verify progress"}
-            </button>
             <button className="button-primary" onClick={handleClaim} disabled={claiming}>
               {claiming ? "Claiming..." : "Claim earned checkpoints"}
             </button>
