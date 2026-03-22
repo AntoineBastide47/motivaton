@@ -16,7 +16,7 @@ import { backendApi, type AuthStatus, type VerificationResult } from "../api";
 import { useChallengeCache } from "../challenge-cache";
 import { APP_LABELS, formatActionLabel, parseChallengeId } from "../types/challenge";
 
-const CONNECTABLE_APPS = ["github", "leetcode"] as const;
+const CONNECTABLE_APPS = ["github", "leetcode", "chesscom"] as const;
 
 type IndexedChallenge = OnChainChallenge & { index: number };
 type ChallengeLocationState = { challenge?: IndexedChallenge };
@@ -70,6 +70,10 @@ function getActionIcon(appKey: string, action: string) {
       default:
         return "code_blocks";
     }
+  }
+
+  if (appKey === "CHESSCOM") {
+    return "sports_esports";
   }
 
   switch (action) {
@@ -163,6 +167,7 @@ export function ChallengeDetail() {
   const [creatorContribution, setCreatorContribution] = useState<bigint | null>(null);
   const [duolingoInput, setDuolingoInput] = useState("");
   const [leetcodeInput, setLeetcodeInput] = useState("");
+  const [chesscomInput, setChesscomInput] = useState("");
   const [authStatus, setAuthStatus] = useState<AuthStatus | null>(null);
   const [connecting, setConnecting] = useState(false);
   const [backendProgress, setBackendProgress] = useState<number>(
@@ -313,7 +318,7 @@ export function ChallengeDetail() {
           {
             address: CONTRACT_ADDRESS,
             amount: toNano("0.05").toString(),
-            payload: body.toBoc().toString("base64"),
+            payload: boc,
           },
         ],
       });
@@ -381,6 +386,15 @@ export function ChallengeDetail() {
           }
 
           await backendApi.connectLeetCode(userAddress, leetcodeInput.trim());
+          await loadChallenge({ forceRefresh: true, showBlockingLoader: false });
+          return;
+        }
+        case "chesscom": {
+          if (!chesscomInput.trim()) {
+            alert("Enter your Chess.com username.");
+            return;
+          }
+          await backendApi.connectChessCom(userAddress, chesscomInput.trim());
           await loadChallenge({ forceRefresh: true, showBlockingLoader: false });
           return;
         }
@@ -517,7 +531,10 @@ export function ChallengeDetail() {
   const showConnectPrompt = isBeneficiary && isOpen && connectableKey !== null && !appConnected;
   const showConnectedState = isBeneficiary && isOpen && connectableKey !== null && appConnected;
   const showEndedWarning = isBeneficiary && !isOpen && expired && !routeFullyMatched && connectableKey !== null && !appConnected;
-  const needsUsernameInput = connectableKey === "leetcode" && !appConnected;
+  const needsUsernameInput =
+    (connectableKey === "leetcode" || connectableKey === "chesscom") && !appConnected;
+  const usernameInputValue = connectableKey === "chesscom" ? chesscomInput : leetcodeInput;
+  const usernameInputSetter = connectableKey === "chesscom" ? setChesscomInput : setLeetcodeInput;
   const canClaimRewards = isBeneficiary && !fullyReleased && (expired || routeFullyMatched);
   const showManualVerificationInput = canClaimRewards && appKey === "DUOLINGO";
   const nextCheckpoint = earnedCount < challenge.totalCheckpoints ? earnedCount + 1 : challenge.totalCheckpoints;
@@ -598,7 +615,6 @@ export function ChallengeDetail() {
                 {challenge.unlisted && <span className="state-pill is-unlisted">Unlisted</span>}
               </div>
             </div>
-
             <div className="source-card-main" style={{ marginTop: "0.8rem" }}>
               <span className={`vault-icon ${appKey === "LEETCODE" ? "is-leetcode" : "is-github"}`}>
                 <span className="material-symbols-outlined" aria-hidden="true">
@@ -716,8 +732,8 @@ export function ChallengeDetail() {
               <input
                 className="inline-input"
                 placeholder={`Your ${appLabel} username`}
-                value={leetcodeInput}
-                onChange={(event) => setLeetcodeInput(event.target.value)}
+                value={usernameInputValue}
+                onChange={(event) => usernameInputSetter(event.target.value)}
               />
             )}
 
