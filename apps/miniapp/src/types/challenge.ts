@@ -65,8 +65,6 @@ export const APP_ACTIONS: Record<App, { value: AppAction; label: string }[]> = {
     { value: ChessComAction.WinBlitz, label: "Win Blitz" },
     { value: ChessComAction.WinBullet, label: "Win Bullet" },
   ],
-};
-
   [App.Strava]: [
     { value: StravaAction.LogActivity, label: "Log Activity" },
     { value: StravaAction.Run, label: "Run" },
