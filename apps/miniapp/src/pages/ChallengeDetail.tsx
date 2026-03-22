@@ -349,14 +349,11 @@ export function ChallengeDetail() {
   const expired = Date.now() / 1000 > challenge.endDate;
   const fullyCompleted = backendProgress >= challenge.totalCheckpoints;
   const allClaimed = challenge.claimedCount >= challenge.totalCheckpoints;
+  const isOpen = !allClaimed && !fullyCompleted && !expired;
   const progressPct = Math.min(100, Math.round((backendProgress / challenge.totalCheckpoints) * 100));
-  const status = !challenge.active || allClaimed
-    ? fullyCompleted || allClaimed
-      ? "completed"
-      : "closed"
-    : fullyCompleted
-      ? "completed"
-      : expired
+  const status = fullyCompleted || allClaimed
+    ? "completed"
+    : expired
       ? "expired"
       : "active";
   const nextCheckpoint = claimedMap.findIndex((claimed) => !claimed);
@@ -369,10 +366,10 @@ export function ChallengeDetail() {
   const oauthConnection = oauthAppKey ? authStatus?.[oauthAppKey] : undefined;
   const appConnected = oauthConnection?.connected === true;
   const connectedUsername = oauthConnection?.username;
-  const showOAuthConnectPrompt = isBeneficiary && challenge.active && !expired && oauthAppKey !== null && !appConnected;
-  const showOAuthConnectedState = isBeneficiary && challenge.active && oauthAppKey !== null && appConnected;
-  const showOAuthEndedWarning = isBeneficiary && challenge.active && expired && oauthAppKey !== null && !appConnected;
-  const canClaimRewards = isBeneficiary && challenge.active && !allClaimed && (expired || fullyCompleted);
+  const showOAuthConnectPrompt = isBeneficiary && isOpen && oauthAppKey !== null && !appConnected;
+  const showOAuthConnectedState = isBeneficiary && isOpen && oauthAppKey !== null && appConnected;
+  const showOAuthEndedWarning = isBeneficiary && !isOpen && expired && !fullyCompleted && oauthAppKey !== null && !appConnected;
+  const canClaimRewards = isBeneficiary && !allClaimed && (expired || fullyCompleted);
   const showManualVerificationInput = canClaimRewards && appKey === "DUOLINGO";
 
   return (
@@ -495,7 +492,7 @@ export function ChallengeDetail() {
         </section>
       )}
 
-      {challenge.active && !expired && (
+      {isOpen && (
         <section className="surface section-panel action-panel">
           <div className="section-header">
             <div>
@@ -586,7 +583,7 @@ export function ChallengeDetail() {
             </div>
             <div className="summary-row">
               <span className="summary-label">Claim status</span>
-              <span className="summary-value">{challenge.active ? "Open" : "Closed"}</span>
+              <span className="summary-value">{isOpen ? "Open" : "Closed"}</span>
             </div>
             <div className="summary-row">
               <span className="summary-label">Wallet state</span>
@@ -619,7 +616,7 @@ export function ChallengeDetail() {
         </section>
       )}
 
-      {expired && challenge.active && isSponsor && challenge.claimedCount < challenge.totalCheckpoints && (
+      {expired && !allClaimed && isSponsor && (
         <section className="surface section-panel action-panel">
           <div className="section-header">
             <div>

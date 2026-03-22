@@ -15,10 +15,9 @@ function ChallengeCard({ challenge, progress }: { challenge: IndexedChallenge; p
   );
   const expired = Date.now() / 1000 > challenge.endDate;
   const allClaimed = challenge.claimedCount >= challenge.totalCheckpoints;
-  const status = !challenge.active || allClaimed
-    ? progress >= challenge.totalCheckpoints || allClaimed
-      ? "completed"
-      : "closed"
+  const fullyCompleted = progress >= challenge.totalCheckpoints;
+  const status = fullyCompleted || allClaimed
+    ? "completed"
     : expired
       ? "expired"
       : "active";
