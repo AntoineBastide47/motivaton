@@ -101,7 +101,6 @@ function ChallengeCard({
           <div className="vault-title-wrap">
             <div className="vault-label-row">
               <span className="vault-app-tag">{appLabel}</span>
-              <span className="mini-tag">#{challenge.index}</span>
               {challenge.unlisted && <span className="mini-tag">Unlisted</span>}
               <span className={`state-pill is-${statusKey}`}>{statusLabel}</span>
             </div>
@@ -119,26 +118,6 @@ function ChallengeCard({
             <span className="vault-money-label">Locked reward</span>
           </div>
         </div>
-      </div>
-
-      <div className="vault-route" aria-hidden="true">
-        {Array.from({ length: visibleSteps }, (_, index) => {
-          const state =
-            index < challenge.claimedCount || fullyReleased
-              ? "claimed"
-              : index < earnedCount
-                ? "ready"
-                : index === earnedCount && earnedCount < challenge.totalCheckpoints
-                  ? "current"
-                  : "locked";
-
-          return (
-            <span key={index} className={`vault-node is-${state}`}>
-              {index + 1}
-            </span>
-          );
-        })}
-        {hiddenSteps > 0 && <span className="vault-node overflow">+{hiddenSteps}</span>}
       </div>
 
       <div className="vault-progress-row">
@@ -207,31 +186,15 @@ export function Home() {
       <header className="app-topbar">
         <div className="app-topbar-inner">
           <Link to="/" className="brand-lockup" aria-label="Motivaton home">
-            <span className="brand-mark" aria-hidden="true">
-              <span className="material-symbols-outlined">grid_view</span>
-            </span>
             <div className="brand-copy">
               <div className="brand-title">MOTIVATON</div>
               <div className="brand-subtitle">Reward Engine</div>
             </div>
           </Link>
 
-          <div className="topbar-meta">
-            <div className="signal-stack" aria-hidden="true">
-              <div className={`signal ${userAddress ? "is-on" : ""}`}>
-                <span className="signal-dot" />
-                <span>{userAddress ? "Wallet active" : "Wallet idle"}</span>
-              </div>
-              <div className="signal is-on">
-                <span className="signal-dot" />
-                <span>GitHub + LeetCode</span>
-              </div>
-            </div>
-
-            <button type="button" className="wallet-control" onClick={() => void tonConnectUI.openModal()}>
-              {userAddress ? formatWalletPreview(userAddress) : "Connect"}
-            </button>
-          </div>
+          <button type="button" className="wallet-control" onClick={() => void tonConnectUI.openModal()}>
+            {userAddress ? formatWalletPreview(userAddress) : "Connect"}
+          </button>
         </div>
       </header>
 

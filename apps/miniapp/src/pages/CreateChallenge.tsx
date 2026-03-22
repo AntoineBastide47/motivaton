@@ -263,14 +263,14 @@ export function CreateChallenge() {
                   />
 
                   <div className="quantity-controls">
-                    <button type="button" className="stepper" onClick={() => setCount((current) => Math.max(1, current - 1))}>
-                      <span className="material-symbols-outlined" aria-hidden="true">
-                        remove
-                      </span>
-                    </button>
                     <button type="button" className="stepper" onClick={() => setCount((current) => current + 1)}>
                       <span className="material-symbols-outlined" aria-hidden="true">
                         add
+                      </span>
+                    </button>
+                    <button type="button" className="stepper" onClick={() => setCount((current) => Math.max(1, current - 1))}>
+                      <span className="material-symbols-outlined" aria-hidden="true">
+                        remove
                       </span>
                     </button>
                   </div>

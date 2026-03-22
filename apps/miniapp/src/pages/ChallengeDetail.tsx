@@ -721,26 +721,66 @@ export function ChallengeDetail() {
             </div>
           </section>
 
-          <section className={`panel ${showConnectPrompt || canClaimRewards ? "panel-accent" : "panel-soft"} next-panel`}>
+          {showConnectPrompt && (
+            <section className="panel panel-accent next-panel">
+              <div className="section-kicker">{appLabel} account</div>
+              <h2 className="section-title">Connect {appLabel}</h2>
+              <div className="next-copy">
+                <p className="support-copy tight">
+                  Link your {appLabel} account so this path can track live activity and unlock reward slices.
+                  Without this connection, the challenge cannot verify your progress.
+                </p>
+              </div>
+
+              {needsUsernameInput && (
+                <input
+                  className="inline-input"
+                  placeholder={`Your ${appLabel} username`}
+                  value={usernameInputValue}
+                  onChange={(event) => usernameInputSetter(event.target.value)}
+                />
+              )}
+
+              <div className="next-actions">
+                <button className="primary-button" onClick={handleConnectApp} disabled={connecting}>
+                  {connecting ? `Connecting ${appLabel}...` : `Connect ${appLabel}`}
+                </button>
+              </div>
+            </section>
+          )}
+
+          {showConnectedState && (
+            <section className="panel panel-soft next-panel">
+              <div className="section-kicker">{appLabel} account</div>
+              <h2 className="section-title">Tracking live</h2>
+              <div className="next-copy">
+                <p className="support-copy tight">
+                  {connectedUsername
+                    ? <>Synced as {connectableKey === "github" ? `@${connectedUsername}` : connectedUsername}. Your {actionLabel.toLowerCase()} activity is being tracked automatically.</>
+                    : <>Your {appLabel} account is connected. Activity is being tracked automatically.</>}
+                </p>
+              </div>
+            </section>
+          )}
+
+          {showEndedWarning && (
+            <section className="panel panel-soft next-panel">
+              <div className="section-kicker">{appLabel} account</div>
+              <h2 className="section-title">{appLabel} was never linked</h2>
+              <div className="next-copy">
+                <p className="support-copy tight">
+                  No {appLabel} account was connected while this path was live. No verified activity was recorded.
+                </p>
+              </div>
+            </section>
+          )}
+
+          <section className={`panel ${canClaimRewards ? "panel-accent" : "panel-soft"} next-panel`}>
             <div className="section-kicker">Next move</div>
             <h2 className="section-title">{nextTitle}</h2>
             <div className="next-copy">
               <p className="support-copy tight">{nextCopy}</p>
-              {showConnectedState && connectedUsername && (
-                <div className="connection-note">
-                  Synced as {connectableKey === "github" ? `@${connectedUsername}` : connectedUsername}
-                </div>
-              )}
             </div>
-
-            {showConnectPrompt && needsUsernameInput && (
-              <input
-                className="inline-input"
-                placeholder={`Your ${appLabel} username`}
-                value={usernameInputValue}
-                onChange={(event) => usernameInputSetter(event.target.value)}
-              />
-            )}
 
             {showManualVerificationInput && (
               <input
@@ -752,12 +792,6 @@ export function ChallengeDetail() {
             )}
 
             <div className="next-actions">
-              {showConnectPrompt && (
-                <button className="primary-button" onClick={handleConnectApp} disabled={connecting}>
-                  {connecting ? `Connecting ${appLabel}...` : `Connect ${appLabel}`}
-                </button>
-              )}
-
               {canClaimRewards && (
                 <>
                   <button className="primary-button" onClick={handleClaim} disabled={claiming}>
@@ -769,7 +803,7 @@ export function ChallengeDetail() {
                 </>
               )}
 
-              {!showConnectPrompt && !canClaimRewards && (
+              {!canClaimRewards && (
                 <button className="ghost-button" onClick={handleRefresh} disabled={refreshing}>
                   {refreshing ? "Refreshing..." : "Refresh route"}
                 </button>
