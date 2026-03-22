@@ -16,7 +16,7 @@ import { backendApi, type AuthStatus, type VerificationResult } from "../api";
 import { useChallengeCache } from "../challenge-cache";
 import { APP_LABELS, formatActionLabel, parseChallengeId } from "../types/challenge";
 
-const CONNECTABLE_APPS = ["github", "leetcode", "chesscom"] as const;
+const CONNECTABLE_APPS = ["github", "leetcode", "chesscom", "strava"] as const;
 
 type IndexedChallenge = OnChainChallenge & { index: number };
 type ChallengeLocationState = { challenge?: IndexedChallenge };
@@ -396,6 +396,11 @@ export function ChallengeDetail() {
           }
           await backendApi.connectChessCom(userAddress, chesscomInput.trim());
           await loadChallenge({ forceRefresh: true, showBlockingLoader: false });
+          return;
+        }
+        case "strava": {
+          const { url } = await backendApi.startStravaOAuth(userAddress, idx);
+          window.location.href = url;
           return;
         }
       }
