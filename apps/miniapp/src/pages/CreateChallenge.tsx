@@ -347,7 +347,7 @@ export function CreateChallenge() {
                 <div className="builder-label">Visibility</div>
                 <h3>{unlisted ? "Unlisted challenge" : "Public challenge"}</h3>
                 <label className={`toggle-card ${unlisted ? "is-on" : ""}`}>
-                  <span>
+                  <span className="toggle-copy">
                     <span className="toggle-title">Hide from public browse</span>
                     <span className="toggle-note">The path still works normally, but only direct visitors will see it.</span>
                   </span>

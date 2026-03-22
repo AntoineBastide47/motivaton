@@ -991,7 +991,10 @@ a {
 .quantity-input,
 .reward-input,
 .inline-input {
+  box-sizing: border-box;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   min-height: 3.05rem;
   padding: 0.78rem 0.9rem;
   border: 1px solid var(--line);
@@ -1176,6 +1179,8 @@ a {
 
 .field-panel,
 .context-card {
+  min-width: 0;
+  overflow: hidden;
   padding: 0.95rem;
   border-radius: 1rem;
   border: 1px solid var(--line);
@@ -1193,6 +1198,7 @@ a {
 }
 
 .field-input {
+  display: block;
   margin-top: 0.6rem;
 }
 
@@ -1210,6 +1216,13 @@ a {
   cursor: pointer;
 }
 
+.toggle-copy {
+  display: grid;
+  gap: 0.16rem;
+  min-width: 0;
+  flex: 1;
+}
+
 .toggle-card input {
   position: absolute;
   inset: 0;
@@ -1217,15 +1230,19 @@ a {
 }
 
 .toggle-title {
+  display: block;
   font-size: 0.9rem;
   font-weight: 800;
+  line-height: 1.2;
 }
 
 .toggle-note {
+  display: block;
   margin-top: 0.16rem;
   color: var(--text-muted);
   font-size: 0.72rem;
   line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .toggle-track {
