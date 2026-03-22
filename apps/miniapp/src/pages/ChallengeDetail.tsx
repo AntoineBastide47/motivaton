@@ -592,7 +592,7 @@ export function ChallengeDetail() {
             <div className="summary-row">
               <span className="summary-label">Claim status</span>
               <span className="summary-value">{isOpen ? "Open" : "Closed"}</span>
-            </div>
+            </div>   
             <div className="summary-row">
               <span className="summary-label">Wallet state</span>
               <span className="summary-value">{userAddress ? "Connected" : "Connect a wallet to act"}</span>
