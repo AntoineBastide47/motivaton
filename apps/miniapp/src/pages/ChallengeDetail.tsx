@@ -511,16 +511,17 @@ export function ChallengeDetail() {
   const actionLabel = formatActionLabel(action);
   const expired = Date.now() / 1000 > challenge.endDate;
   const earnedCount = Math.min(backendProgress, challenge.totalCheckpoints);
-  const fullyReleased = challenge.claimedCount >= challenge.totalCheckpoints;
+  const onChainClaimed = challenge.claimedCount >= challenge.totalCheckpoints || !challenge.active;
+  const fullyReleased = earnedCount >= challenge.totalCheckpoints && onChainClaimed;
   const routeFullyMatched = earnedCount >= challenge.totalCheckpoints;
   const isOpen = !fullyReleased && !routeFullyMatched && !expired;
   const progressPct = Math.min(100, Math.round((earnedCount / challenge.totalCheckpoints) * 100));
-  const statusKey = fullyReleased ? "completed" : routeFullyMatched ? "ready" : expired ? "expired" : "active";
+  const statusKey = fullyReleased ? "completed" : routeFullyMatched ? "claimable" : expired ? "expired" : "active";
   const statusLabel =
     statusKey === "completed"
       ? "Completed"
-      : statusKey === "ready"
-        ? "Ready"
+      : statusKey === "claimable"
+        ? "Claimable"
         : statusKey === "expired"
           ? "Expired"
           : "Active";

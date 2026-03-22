@@ -525,7 +525,8 @@ a {
   border-color: rgba(173, 198, 255, 0.16);
 }
 
-.state-pill.is-ready {
+.state-pill.is-ready,
+.state-pill.is-claimable {
   background: rgba(78, 222, 163, 0.14);
   color: var(--success);
   border-color: rgba(78, 222, 163, 0.18);

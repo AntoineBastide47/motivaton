@@ -1,6 +1,7 @@
 import Database from "better-sqlite3";
 import { mkdirSync, existsSync, statSync, rmSync } from "fs";
 import { resolve, dirname } from "path";
+import { Address } from "@ton/core";
 
 export interface EventEntry {
   id: string;
@@ -311,7 +312,6 @@ export function getTelegramChatIdByBeneficiary(beneficiaryRaw: string): string |
   const rows = db().prepare("SELECT wallet_address, telegram_chat_id FROM accounts WHERE telegram_chat_id IS NOT NULL").all() as { wallet_address: string; telegram_chat_id: string }[];
   for (const row of rows) {
     try {
-      const { Address } = require("@ton/core");
       if (Address.parse(row.wallet_address).toRawString() === beneficiaryRaw) {
         return row.telegram_chat_id;
       }

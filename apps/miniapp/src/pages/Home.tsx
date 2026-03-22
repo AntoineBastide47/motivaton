@@ -6,12 +6,12 @@ import { useChallengeCache, type IndexedChallenge } from "../challenge-cache";
 import { App, APP_ACTIONS, APP_LABELS, formatActionLabel, parseChallengeId } from "../types/challenge";
 import { backendApi } from "../api";
 
-type ChallengeStatusFilter = "ALL" | "ACTIVE" | "READY" | "COMPLETED" | "EXPIRED";
+type ChallengeStatusFilter = "ALL" | "ACTIVE" | "CLAIMABLE" | "COMPLETED" | "EXPIRED";
 
 const STATUS_OPTIONS: { value: ChallengeStatusFilter; label: string }[] = [
   { value: "ALL", label: "Any status" },
   { value: "ACTIVE", label: "Active" },
-  { value: "READY", label: "Ready" },
+  { value: "CLAIMABLE", label: "Claimable" },
   { value: "COMPLETED", label: "Completed" },
   { value: "EXPIRED", label: "Expired" },
 ];
@@ -26,14 +26,12 @@ const APP_FILTER_OPTIONS: { value: AppFilter; label: string }[] = [
 function getChallengeStatusKey(
   challenge: IndexedChallenge,
   progress: number,
-  claimed: boolean,
 ): string {
-  const expired = Date.now() / 1000 > challenge.endDate;
   const earnedCount = Math.min(progress, challenge.totalCheckpoints);
-  const fullyReleased = claimed || challenge.claimedCount >= challenge.totalCheckpoints;
-  if (fullyReleased) return "completed";
-  if (earnedCount >= challenge.totalCheckpoints) return "ready";
-  if (expired) return "expired";
+  const onChainClaimed = challenge.claimedCount >= challenge.totalCheckpoints || !challenge.active;
+  if (earnedCount >= challenge.totalCheckpoints && onChainClaimed) return "completed";
+  if (earnedCount >= challenge.totalCheckpoints) return "claimable";
+  if (Date.now() / 1000 > challenge.endDate) return "expired";
   return "active";
 }
 
@@ -99,22 +97,14 @@ function ChallengeCard({
   const { app: appKey, action } = parseChallengeId(challenge.challengeId);
   const appLabel = APP_LABELS[appKey as keyof typeof APP_LABELS] ?? appKey;
   const actionLabel = formatActionLabel(action);
-  const expired = Date.now() / 1000 > challenge.endDate;
   const earnedCount = Math.min(progress, challenge.totalCheckpoints);
   const progressPct = Math.min(100, Math.round((earnedCount / challenge.totalCheckpoints) * 100));
-  const fullyReleased = claimed || challenge.claimedCount >= challenge.totalCheckpoints;
-  const statusKey = fullyReleased
-    ? "completed"
-    : earnedCount >= challenge.totalCheckpoints
-      ? "ready"
-      : expired
-        ? "expired"
-        : "active";
+  const statusKey = getChallengeStatusKey(challenge, progress);
   const statusLabel =
     statusKey === "completed"
       ? "Completed"
-      : statusKey === "ready"
-        ? "Ready"
+      : statusKey === "claimable"
+        ? "Claimable"
         : statusKey === "expired"
           ? "Expired"
           : "Active";
@@ -225,7 +215,7 @@ export function Home() {
       if (appFilter !== "ALL" && app !== appFilter) return false;
       if (actionFilter !== "ALL" && action !== actionFilter) return false;
       if (statusFilter !== "ALL") {
-        const status = getChallengeStatusKey(c, progressMap[String(c.index)] || 0, claimedMap[String(c.index)] || false);
+        const status = getChallengeStatusKey(c, progressMap[String(c.index)] || 0);
         if (status.toUpperCase() !== statusFilter) return false;
       }
       return true;
