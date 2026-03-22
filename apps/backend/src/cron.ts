@@ -1,7 +1,7 @@
 import cron from "node-cron";
 import { Address } from "@ton/core";
 import { getAllChallenges, type OnChainChallenge } from "./chain.js";
-import { getAllAccounts, addChallengeEvents, getChallengeProgress } from "./store.js";
+import { getAllAccounts, addChallengeEvents, getChallengeProgress, isChallengeClaimed } from "./store.js";
 import { fetchUserEvents, extractEvents } from "./events.js";
 
 function normalizeAddress(addr: string): string {
@@ -57,7 +57,13 @@ async function eventsProgressJob() {
   }
 
   const now = Date.now() / 1000;
-  const activeChallenges = challenges.filter((c) => c.active && c.endDate > now);
+  const activeChallenges = challenges.filter((c) => {
+    if (!c.active || c.endDate <= now) return false;
+    if (isChallengeClaimed(c.index)) return false;
+    const progress = getChallengeProgress(c.index);
+    if (progress >= c.totalCheckpoints) return false;
+    return true;
+  });
   if (activeChallenges.length === 0) return;
 
   const accounts = getAllAccounts();
