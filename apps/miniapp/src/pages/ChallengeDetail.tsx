@@ -21,6 +21,11 @@ const CONNECTABLE_APPS = ["github", "leetcode", "chesscom", "strava"] as const;
 type IndexedChallenge = OnChainChallenge & { index: number };
 type ChallengeLocationState = { challenge?: IndexedChallenge };
 type RouteState = "claimed" | "ready" | "current" | "locked";
+type RouteGroup = {
+  state: RouteState;
+  start: number;
+  end: number;
+};
 
 function getConnectableAppKey(appKey: string): (typeof CONNECTABLE_APPS)[number] | null {
   const authKey = appKey.toLowerCase() as (typeof CONNECTABLE_APPS)[number];
@@ -132,6 +137,42 @@ function getRouteCopy(state: RouteState, actionLabel: string, canClaimRewards: b
     default:
       return `Unlocks after the earlier ${actionCopy} checkpoints are complete.`;
   }
+}
+
+function buildRouteGroups(params: {
+  challenge: OnChainChallenge;
+  earnedCount: number;
+  fullyReleased: boolean;
+}): RouteGroup[] {
+  const { challenge, earnedCount, fullyReleased } = params;
+  const groups: RouteGroup[] = [];
+
+  for (let index = 0; index < challenge.totalCheckpoints; index += 1) {
+    const state = getRouteState({
+      index,
+      challenge,
+      earnedCount,
+      fullyReleased,
+    });
+
+    const previous = groups[groups.length - 1];
+    if (previous && previous.state === state) {
+      previous.end = index + 1;
+      continue;
+    }
+
+    groups.push({
+      state,
+      start: index + 1,
+      end: index + 1,
+    });
+  }
+
+  return groups;
+}
+
+function formatCheckpointRange(start: number, end: number) {
+  return start === end ? `Checkpoint ${start}` : `Checkpoints ${start}-${end}`;
 }
 
 function getApiShortReason(error: unknown): string {
@@ -578,6 +619,11 @@ export function ChallengeDetail() {
   const canClaimRewards = isBeneficiary && !fullyReleased && (expired || routeFullyMatched);
   const showManualVerificationInput = canClaimRewards && appKey === "DUOLINGO";
   const nextCheckpoint = earnedCount < challenge.totalCheckpoints ? earnedCount + 1 : challenge.totalCheckpoints;
+  const routeGroups = buildRouteGroups({
+    challenge,
+    earnedCount,
+    fullyReleased,
+  });
   const nextUnlockLabel = fullyReleased
     ? "All slices released"
     : routeFullyMatched
@@ -697,23 +743,19 @@ export function ChallengeDetail() {
             </div>
 
             <div className="route-list">
-              {checkpointMap.map((_, index) => {
-                const routeState = getRouteState({
-                  index,
-                  challenge,
-                  earnedCount,
-                  fullyReleased,
-                });
+              {routeGroups.map((group) => {
+                const checkpointCount = group.end - group.start + 1;
+                const groupedReward = Number(challenge.amountPerCheckpoint) * checkpointCount;
 
                 return (
-                  <div key={index} className={`route-item is-${routeState}`}>
+                  <div key={`${group.state}-${group.start}-${group.end}`} className={`route-item is-${group.state}`}>
                     <span className="route-bullet" aria-hidden="true">
                       <span className="material-symbols-outlined">
-                        {routeState === "claimed"
+                        {group.state === "claimed"
                           ? "check"
-                          : routeState === "ready"
+                          : group.state === "ready"
                             ? "lock_open"
-                            : routeState === "current"
+                            : group.state === "current"
                               ? "play_arrow"
                               : "lock"}
                       </span>
@@ -721,20 +763,32 @@ export function ChallengeDetail() {
 
                     <div className="route-card">
                       <div className="route-top">
-                        <span className="route-step-label">Checkpoint {index + 1}</span>
+                        <span className="route-step-label">
+                          {formatCheckpointRange(group.start, group.end)}
+                        </span>
                         <span className="route-step-state">
-                          {getRouteStateLabel(routeState, canClaimRewards)}
+                          {getRouteStateLabel(group.state, canClaimRewards)}
                         </span>
                       </div>
                       <h3 className="route-step-title">
-                        {formatTonAmount(challenge.amountPerCheckpoint)} TON
+                        {formatTonAmount(groupedReward)} TON
                       </h3>
                       <p className="route-step-copy">
-                        {getRouteCopy(routeState, actionLabel, canClaimRewards)}
+                        {getRouteCopy(group.state, actionLabel, canClaimRewards)}
                       </p>
                       <div className="route-step-reward">
-                        <span>{routeState === "current" ? "Next slice" : "Reward slice"}</span>
-                        <strong>{actionLabel}</strong>
+                        <span>
+                          {checkpointCount === 1
+                            ? group.state === "current"
+                              ? "Next slice"
+                              : "Reward slice"
+                            : `${checkpointCount} slices`}
+                        </span>
+                        <strong>
+                          {group.start === group.end
+                            ? actionLabel
+                            : `${formatCheckpointRange(group.start, group.end)} · ${actionLabel}`}
+                        </strong>
                       </div>
                     </div>
                   </div>
