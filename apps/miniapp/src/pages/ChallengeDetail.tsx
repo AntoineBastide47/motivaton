@@ -592,7 +592,7 @@ export function ChallengeDetail() {
           </div>
         </div>
       </section>
-
+ 
       {canClaimRewards && (
         <section className="surface surface-accent section-panel action-panel">
           <div className="section-header">
