@@ -182,7 +182,7 @@ export function ChallengeDetail() {
           {
             address: CONTRACT_ADDRESS,
             amount: toNano("0.05").toString(),
-            payload: boc,
+            payload: body.toBoc().toString("base64"),
           },
         ],
       });
