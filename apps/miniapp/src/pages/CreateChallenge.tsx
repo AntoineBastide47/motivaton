@@ -64,7 +64,7 @@ export function CreateChallenge() {
   const actionLabel = actions.find((entry) => entry.value === action)?.label ?? action;
   const previewCount = Math.min(count, 6);
   const overflowCount = Math.max(0, count - previewCount);
-  const minDate = new Date(Date.now() + 86400000).toISOString().split("T")[0];
+  const minDate = new Date().toISOString().split("T")[0];
 
   async function waitForChallengeIndexing(params: {
     sponsor: string;
