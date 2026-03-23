@@ -7,7 +7,7 @@ function getBotToken(): string | null {
 const APP_URL = "https://motivaton-backend-production.up.railway.app";
 
 const OPEN_APP_MARKUP = {
-  inline_keyboard: [[{ text: "Open Motivaton", web_app: { url: APP_URL } }]],
+  inline_keyboard: [[{ text: "Open Motivaton", url: APP_URL }]],
 };
 
 export async function sendTelegramMessage(chatId: string, text: string, parseMode: "HTML" | "Markdown" = "HTML", replyMarkup?: object): Promise<boolean> {
