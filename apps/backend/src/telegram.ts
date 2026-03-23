@@ -4,7 +4,13 @@ function getBotToken(): string | null {
   return process.env.TELEGRAM_BOT_TOKEN || null;
 }
 
-export async function sendTelegramMessage(chatId: string, text: string, parseMode: "HTML" | "Markdown" = "HTML"): Promise<boolean> {
+const APP_URL = "https://motivaton-backend-production.up.railway.app";
+
+const OPEN_APP_MARKUP = {
+  inline_keyboard: [[{ text: "Open Motivaton", web_app: { url: APP_URL } }]],
+};
+
+export async function sendTelegramMessage(chatId: string, text: string, parseMode: "HTML" | "Markdown" = "HTML", replyMarkup?: object): Promise<boolean> {
   const token = getBotToken();
   if (!token) {
     console.log("[telegram] No TELEGRAM_BOT_TOKEN set, skipping");
@@ -12,15 +18,18 @@ export async function sendTelegramMessage(chatId: string, text: string, parseMod
   }
 
   try {
+    const body: Record<string, unknown> = {
+      chat_id: chatId,
+      text,
+      parse_mode: parseMode,
+      disable_notification: false,
+    };
+    if (replyMarkup) body.reply_markup = replyMarkup;
+
     const resp = await fetch(`${TELEGRAM_API}/bot${token}/sendMessage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text,
-        parse_mode: parseMode,
-        disable_notification: false,
-      }),
+      body: JSON.stringify(body),
     });
     if (!resp.ok) {
       console.error(`[telegram] sendMessage failed: ${resp.status} ${await resp.text()}`);
@@ -35,7 +44,7 @@ export async function sendTelegramMessage(chatId: string, text: string, parseMod
 
 export async function sendToGroups(chatIds: string[], text: string): Promise<void> {
   for (const chatId of chatIds) {
-    await sendTelegramMessage(chatId, text);
+    await sendTelegramMessage(chatId, text, "HTML", OPEN_APP_MARKUP);
   }
 }
 
