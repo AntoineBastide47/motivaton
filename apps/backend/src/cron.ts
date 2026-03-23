@@ -302,11 +302,13 @@ async function eventsProgressJob(): Promise<(OnChainChallenge & { index: number 
 }
 
 async function minuteJob() {
+  console.log("[cron] Minute job started");
   const challenges = await eventsProgressJob();
   if (challenges) {
     await autoClaimJob(challenges);
     await groupNotificationJob(challenges);
   }
+  console.log("[cron] Minute job finished");
 }
 
 export function startCronJobs() {
