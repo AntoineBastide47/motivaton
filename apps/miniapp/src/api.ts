@@ -172,4 +172,11 @@ export const backendApi = {
       body: JSON.stringify({ walletAddress, chatId: String(chatId) }),
     });
   },
+
+  trackChallengeInGroup(challengeIdx: number, chatId: string) {
+    return request<{ ok: boolean }>("/track-group", {
+      method: "POST",
+      body: JSON.stringify({ challengeIdx, chatId }),
+    });
+  },
 };

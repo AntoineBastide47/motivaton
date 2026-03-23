@@ -10,6 +10,7 @@ import {
   toNano,
 } from "../contract";
 import { useChallengeCache } from "../challenge-cache";
+import { backendApi } from "../api";
 
 function formatWalletPreview(address: string) {
   if (address.length <= 12) return address;
@@ -32,6 +33,17 @@ export function CreateChallenge() {
   const [tonConnectUI] = useTonConnectUI();
   const userAddress = useTonAddress();
   const { storeChallenge } = useChallengeCache();
+
+  // Telegram group chat ID — present when the app is opened from a group inline button
+  const telegramChatId = useMemo(() => {
+    try {
+      const chat = (window as any).Telegram?.WebApp?.initDataUnsafe?.chat;
+      if (chat && (chat.type === "group" || chat.type === "supergroup")) {
+        return String(chat.id);
+      }
+    } catch {}
+    return null;
+  }, []);
 
   const [app, setApp] = useState<App>(App.Github);
   const [action, setAction] = useState<AppAction>(APP_ACTIONS[App.Github][0].value);
@@ -146,6 +158,14 @@ export function CreateChallenge() {
       });
 
       storeChallenge(indexedChallenge);
+
+      // Auto-track in the Telegram group this was opened from
+      if (telegramChatId) {
+        backendApi.trackChallengeInGroup(indexedChallenge.index, telegramChatId).catch((err) =>
+          console.warn("[create] Failed to auto-track in group:", err),
+        );
+      }
+
       navigate(`/challenge/${indexedChallenge.index}`, {
         state: { challenge: indexedChallenge },
       });

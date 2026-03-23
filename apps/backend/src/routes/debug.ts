@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { getChallengeProgress, getChallengeEvents, getAllProgress, isChallengeClaimed, getAllClaimed, clearChallengeClaimed } from "../store.js";
+import { getChallengeProgress, getChallengeEvents, getAllProgress, isChallengeClaimed, getAllClaimed, clearChallengeClaimed, addChallengeGroup } from "../store.js";
 import { getAllChallenges, getChallenge } from "../chain.js";
 import { progressJob } from "../cron.js";
 import { getLiveChallengeProgress } from "../live-verification.js";
@@ -82,6 +82,17 @@ debugRouter.get("/autoclaim", async (_req, res) => {
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
+});
+
+debugRouter.post("/track-group", (req, res) => {
+  const { challengeIdx, chatId } = req.body;
+  if (typeof challengeIdx !== "number" || typeof chatId !== "string") {
+    res.status(400).json({ error: "challengeIdx (number) and chatId (string) required" });
+    return;
+  }
+  addChallengeGroup(challengeIdx, chatId);
+  console.log(`[api] Auto-tracked challenge #${challengeIdx} in group ${chatId}`);
+  res.json({ ok: true, challengeIdx, chatId });
 });
 
 debugRouter.get("/health", (_req, res) => {
