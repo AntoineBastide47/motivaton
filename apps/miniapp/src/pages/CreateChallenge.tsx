@@ -37,11 +37,18 @@ export function CreateChallenge() {
   // Telegram group chat ID — present when the app is opened from a group inline button
   const telegramChatId = useMemo(() => {
     try {
-      const chat = (window as any).Telegram?.WebApp?.initDataUnsafe?.chat;
+      const tg = (window as any).Telegram?.WebApp;
+      const initData = tg?.initDataUnsafe;
+      console.log("[create] Telegram.WebApp.initDataUnsafe:", JSON.stringify(initData));
+      const chat = initData?.chat;
       if (chat && (chat.type === "group" || chat.type === "supergroup")) {
+        console.log("[create] Detected group chat:", chat.id, chat.type);
         return String(chat.id);
       }
-    } catch {}
+      console.log("[create] No group chat detected (chat:", chat, ")");
+    } catch (err) {
+      console.error("[create] Error reading Telegram chat:", err);
+    }
     return null;
   }, []);
 
@@ -160,10 +167,14 @@ export function CreateChallenge() {
       storeChallenge(indexedChallenge);
 
       // Auto-track in the Telegram group this was opened from
+      console.log("[create] telegramChatId:", telegramChatId);
       if (telegramChatId) {
-        backendApi.trackChallengeInGroup(indexedChallenge.index, telegramChatId).catch((err) =>
-          console.warn("[create] Failed to auto-track in group:", err),
-        );
+        console.log("[create] Auto-tracking challenge", indexedChallenge.index, "in group", telegramChatId);
+        backendApi.trackChallengeInGroup(indexedChallenge.index, telegramChatId)
+          .then(() => console.log("[create] Auto-track succeeded"))
+          .catch((err) => console.warn("[create] Failed to auto-track in group:", err));
+      } else {
+        console.log("[create] Skipping auto-track: no group chat ID");
       }
 
       navigate(`/challenge/${indexedChallenge.index}`, {
