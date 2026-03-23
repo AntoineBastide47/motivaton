@@ -28,9 +28,7 @@ build-backend:
 	pnpm --filter motivaton-backend build
 
 # Run both backend and miniapp in parallel
-dev: build-backend
-	@echo "Starting backend and miniapp..."
-	@pnpm --filter motivaton-backend dev & pnpm --filter motivaton-miniapp dev
+dev: build-backend dev-backend dev-miniapp
 
 # Deploy the ProductivityEscrow contract to TON testnet
 # Required env vars:
