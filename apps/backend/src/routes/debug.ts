@@ -120,6 +120,11 @@ debugRouter.post("/track-group", async (req, res) => {
   }
 });
 
+debugRouter.post("/debug-tg", (req, res) => {
+  console.log("[debug-tg]", JSON.stringify(req.body));
+  res.json({ ok: true });
+});
+
 debugRouter.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });

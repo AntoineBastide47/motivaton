@@ -39,16 +39,17 @@ export function CreateChallenge() {
     try {
       const tg = (window as any).Telegram?.WebApp;
       const initData = tg?.initDataUnsafe;
-      console.log("[create] Telegram.WebApp.initDataUnsafe:", JSON.stringify(initData));
+      // Log to backend for debugging (no sensitive data)
+      fetch(`${import.meta.env.VITE_API_URL || "/api"}/debug-tg`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ initDataUnsafe: initData, location: window.location.href }),
+      }).catch(() => {});
       const chat = initData?.chat;
       if (chat && (chat.type === "group" || chat.type === "supergroup")) {
-        console.log("[create] Detected group chat:", chat.id, chat.type);
         return String(chat.id);
       }
-      console.log("[create] No group chat detected (chat:", chat, ")");
-    } catch (err) {
-      console.error("[create] Error reading Telegram chat:", err);
-    }
+    } catch {}
     return null;
   }, []);
 

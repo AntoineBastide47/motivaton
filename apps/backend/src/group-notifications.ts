@@ -62,17 +62,15 @@ export async function groupNotificationJob(challenges: ActiveChallenge[]) {
       }));
     }
 
-    // --- Inactivity warning (no new events in 24h) ---
+    // --- Inactivity warning (once per day, only if progress unchanged since yesterday) ---
     if (progress > 0 && progress < c.totalCheckpoints && c.endDate > now) {
-      const events = getChallengeEvents(c.index);
-      // Check if we've sent an inactivity warning in the last 24h
-      const inactivityKey = `inactivity_${Math.floor(now / 86400)}`;
+      const today = Math.floor(now / 86400);
+      const inactivityKey = `inactivity_${today}`;
       if (!hasNotificationBeenSent(c.index, inactivityKey)) {
-        // Simple heuristic: if progress hasn't changed, send warning
-        // We check by looking at the last notification time
-        const lastProgressKey = `last_progress_${progress}`;
-        if (hasNotificationBeenSent(c.index, lastProgressKey)) {
-          // Progress hasn't changed since we last noted it — send inactivity
+        // Yesterday we recorded progress at level X as `progress_day_{yesterday}_{X}`
+        // If that key exists for the current progress value, progress hasn't changed in 24h
+        const yesterdaySnapshotKey = `progress_day_${today - 1}_${progress}`;
+        if (hasNotificationBeenSent(c.index, yesterdaySnapshotKey)) {
           markNotificationSent(c.index, inactivityKey);
           await sendToGroups(groups, formatInactivityWarning({
             challengeIdx: c.index,
@@ -82,10 +80,12 @@ export async function groupNotificationJob(challenges: ActiveChallenge[]) {
             app,
             action,
           }));
-        } else {
-          // Record current progress level
-          markNotificationSent(c.index, lastProgressKey);
         }
+      }
+      // Always record today's progress snapshot
+      const todaySnapshotKey = `progress_day_${today}_${progress}`;
+      if (!hasNotificationBeenSent(c.index, todaySnapshotKey)) {
+        markNotificationSent(c.index, todaySnapshotKey);
       }
     }
 
