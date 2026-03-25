@@ -236,7 +236,7 @@ export function Home() {
             </div>
           </Link>
 
-          <button type="button" className="wallet-control" onClick={() => void tonConnectUI.openModal()}>
+          <button type="button" className="wallet-control" onClick={() => void (userAddress ? tonConnectUI.disconnect() : tonConnectUI.openModal())}>
             {userAddress ? formatWalletPreview(userAddress) : "Connect"}
           </button>
         </div>
