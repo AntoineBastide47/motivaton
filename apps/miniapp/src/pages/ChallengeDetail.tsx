@@ -393,7 +393,7 @@ export function ChallengeDetail() {
       const boc = body.toBoc().toString("base64");
 
       await tonConnectUI.sendTransaction({
-        validUntil: Math.floor(Date.now() / 1000) + 600,
+        validUntil: Math.floor(Date.now() / 1000) + 3600,
         messages: [
           {
             address: CONTRACT_ADDRESS,
@@ -427,7 +427,7 @@ export function ChallengeDetail() {
       const body = buildRefundUnclaimedBody(idx);
 
       await tonConnectUI.sendTransaction({
-        validUntil: Math.floor(Date.now() / 1000) + 600,
+        validUntil: Math.floor(Date.now() / 1000) + 3600,
         messages: [
           {
             address: CONTRACT_ADDRESS,
@@ -515,7 +515,7 @@ export function ChallengeDetail() {
     try {
       const body = buildAddFundsBody(idx);
       await tonConnectUI.sendTransaction({
-        validUntil: Math.floor(Date.now() / 1000) + 600,
+        validUntil: Math.floor(Date.now() / 1000) + 3600,
         messages: [
           {
             address: CONTRACT_ADDRESS,

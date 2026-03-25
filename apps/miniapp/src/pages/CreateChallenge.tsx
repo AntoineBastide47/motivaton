@@ -131,7 +131,7 @@ export function CreateChallenge() {
 
       setSubmissionStatus("Waiting for wallet confirmation...");
       await tonConnectUI.sendTransaction({
-        validUntil: Math.floor(Date.now() / 1000) + 600,
+        validUntil: Math.floor(Date.now() / 1000) + 3600,
         messages: [
           {
             address: CONTRACT_ADDRESS,
